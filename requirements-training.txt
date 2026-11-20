@@ -1,0 +1,4 @@
+# training/restore_m17.py: rebuild the M17 trainer's input files from the
+# Hugging Face dataset tokoroten-jp/tsume-gen-m17-pretraining.
+pyarrow>=15
+numpy>=1.26

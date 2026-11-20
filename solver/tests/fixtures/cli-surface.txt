@@ -1,0 +1,153 @@
+movegen
+  <sfen> value
+  --stdin flag
+perft
+  <sfen> value required
+  <depth> value required
+solve-sfen
+  <sfen> value
+  --max-ply value default=11
+  --node-budget value default=100000
+  --attacker value values=b|w
+  --no-strict-material flag hidden
+  --graph value default=pruned values=full|pruned|none
+  --useless-interposition value default=classical values=keep|prune|classical
+  --stdin flag
+  --table value default=exact
+  --prober-threads value default=1
+validate
+  --threads value default=<logical cores>
+reduce
+  --attempts value default=8
+  --max-ply value required
+  --node-budget value required
+  --seed value
+  --length-k value default=0
+  --no-rule-b-entry flag hidden
+  --cg-entry flag
+  --jobs value default=1
+  --reduce-budget-ladder value
+  --emit-negatives value
+  --emit-budget-outs value
+  --emit-record value
+  --emit-unresolved value
+  --record-solver-id value
+  --record-produced-by value
+  --record-route value values=extend|mine|distill|model_sampled|reduce|import
+  --record-generation value
+  --record-reduce-version value
+  --threads value default=<logical cores>
+  --table value default=exact
+  --prober-threads value default=1
+solve
+  --max-ply value required
+  --node-budget value required
+  --emit-main-line flag
+  --emit-record value
+  --emit-unresolved value
+  --record-solver-id value
+  --record-produced-by value
+  --record-route value values=extend|mine|distill|model_sampled|reduce|import
+  --record-generation value
+  --record-reduce-version value
+  --threads value default=<logical cores>
+  --table value default=exact
+  --prober-threads value default=1
+probe
+  --engine value values=dfpn|exact-probe|cdfpn required
+  --max-ply value required
+  --node-budget value required
+  --threads value default=<logical cores>
+  --table value default=exact
+  --prober-threads value default=1
+reduce-accepted
+  --node-budget value required
+  --attempts value default=8
+  --length-k value default=0
+  --jobs value default=1
+  --reduce-budget-ladder value
+  --emit-budget-outs value
+  --emit-record value
+  --emit-unresolved value
+  --record-solver-id value
+  --record-produced-by value
+  --record-route value values=extend|mine|distill|model_sampled|reduce|import
+  --record-generation value
+  --record-reduce-version value
+  --threads value default=<logical cores>
+  --table value default=exact
+  --prober-threads value default=1
+distill
+  --seed value required
+  --attempts value default=16
+  --distill-v2 flag
+  --allow-length-change flag
+  --origin value
+  --origin-class value values=own_authored|own_generated|third_party
+  --max-ply value required
+  --node-budget value default=250000
+  --max-nodes value default=4000000
+  --prestrip flag
+  --probe value default=exact values=exact|dfpn
+  --dfpn-node-budget value default=1000000
+  --stats-out value
+  --emit-negatives value
+  --emit-budget-outs value
+  --emit-record value
+  --emit-unresolved value
+  --record-solver-id value
+  --record-produced-by value
+  --record-route value values=extend|mine|distill|model_sampled|reduce|import
+  --record-generation value
+  --record-reduce-version value
+  --threads value default=<logical cores>
+rule-b-probe
+  --node-budget value default=200000
+  --mate-ply value
+  --stats-out value
+  --threads value default=<logical cores>
+main-line-paths
+  --cap value default=512
+  --threads value default=<logical cores>
+stored-main-line
+  --threads value default=<logical cores>
+extend
+  --node-budget value required
+  --source-max-ply value default=11
+  --emit value default=accepted values=accepted|all|candidates
+  --order value
+  --ranker-id value
+  --max-verify value default=0
+  --stop-after-accepted value default=0
+  --probe value default=exact values=exact|dfpn
+  --dfpn-node-budget value default=1000000
+  --origin value
+  --origin-class value values=own_authored|own_generated|third_party
+  --stats-out value
+  --emit-budget-outs value
+  --emit-record value
+  --emit-unresolved value
+  --record-solver-id value
+  --record-produced-by value
+  --record-route value values=extend|mine|distill|model_sampled|reduce|import
+  --record-generation value
+  --record-reduce-version value
+  --threads value default=<logical cores>
+mine
+  --family value default=random_selfplay values=random_direct|random_selfplay|standard_selfplay
+  --count value default=100
+  --seed value required
+  --plies value default=5..40
+  --max-ply value default=7
+  --check-from value
+  --node-budget value default=200000
+  --max-games value
+  --prestrip flag
+  --probe value default=exact values=exact|dfpn
+  --dfpn-node-budget value default=1000000
+  --config value
+  --distribution value values=king-zone|slider-pressure|mate-shell|uniform
+  --policy value default=builtin
+  --stats-out value
+  --threads value default=<logical cores>
+help

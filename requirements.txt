@@ -1,0 +1,6 @@
+# Generator inference and the sample (examples/generate_and_judge.py).
+# CPU is enough for the sample; install a CUDA build of torch for a GPU.
+torch>=2.4
+numpy>=1.26          # the legal decode seeds its side stream from the generator state
+safetensors>=0.4
+huggingface_hub>=0.24

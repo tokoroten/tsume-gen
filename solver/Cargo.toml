@@ -1,0 +1,50 @@
+[package]
+name = "tsume-solver"
+version = "1.8.0"
+edition = "2021"
+rust-version = "1.85"
+description = "High-performance offline strict-tsume solver and JSONL pipeline stages for TSUME"
+license = "MIT"
+publish = false
+
+[lib]
+name = "tsume_solver"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tsume-solver"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+# `color` is deliberately off: it pulls anstyle-wincon/windows-sys, which needs
+# binutils dlltool on the x86_64-pc-windows-gnu host, and the CLI writes plain
+# text to stderr anyway.
+clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
+# Already present in serde_json's `preserve_order` tree; used directly so graph
+# nodes keep insertion order in a fully typed model.
+indexmap = { version = "2", features = ["serde"] }
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` keeps unknown PipelineRecord fields (and their order) intact so
+# the Rust stages round-trip documents written by the TypeScript pipeline byte for byte.
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+
+# Quick builds for screening speed changes (docs/experiments/solver-scaling/
+# README.md §15): `cargo build --profile dev-bench`, binary in
+# target/dev-bench.  Compare dev-bench builds only with each other; confirm
+# with the release profile.
+[profile.dev-bench]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+incremental = true
