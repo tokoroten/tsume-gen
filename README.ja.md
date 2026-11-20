@@ -14,10 +14,10 @@
 | --- | --- | --- |
 | データセット（v4（2026-11-01）で約 3,330 万図、CC BY 4.0） | <https://huggingface.co/datasets/tokoroten-jp/generated-tsume-shogi> | 公開済み |
 | 本実験の学習データ（約 805 万件、CC BY 4.0） | <https://huggingface.co/datasets/tokoroten-jp/tsume-gen-m17-pretraining> | 公開済み |
-| 生成器の重み（小・中・大の事前学習と、兄弟学習 2,000 ステップ） | <https://huggingface.co/tokoroten-jp/tsume-gen> | 公開済み |
+| 生成器の重み（小・中・大の事前学習と、大にソルバの判定を報酬とする強化学習 2,000 ステップ） | <https://huggingface.co/tokoroten-jp/tsume-gen> | 公開済み |
 | ソルバ | このリポジトリの `solver/` | 公開済み |
 | 生成器を動かす Python のサンプル | このリポジトリの `examples/` | 公開済み |
-| 生成器の学習のコード（事前学習・兄弟学習） | このリポジトリ | 今後足す |
+| 生成器の学習のコード（事前学習・強化学習） | このリポジトリ | 今後足す |
 | 量産の仕組み（生成・判定・縮約・駒足しの流れ） | このリポジトリ | 今後足す |
 | ブラウザでの作問 | <https://tsume.quest/generate> | 公開済み（このリポジトリの対象外） |
 
@@ -154,6 +154,6 @@ python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b G
 
 ## 今後
 
-- 生成器の学習のコード（データセットからの学習例の抽出、事前学習、兄弟学習）。
+- 生成器の学習のコード（データセットからの学習例の抽出、事前学習、強化学習）。
 - 量産の仕組み（生成、ソルバでの判定、盤面縮約、余詰を消す駒足し）。
 - 論文の完全版（arXiv）。

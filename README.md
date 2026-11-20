@@ -14,10 +14,10 @@ Code for a deep-learning generator of tsume shogi (Japanese chess mate problems)
 | --- | --- | --- |
 | Dataset (about 33.3 million diagrams in v4, 2026-11-01; CC BY 4.0) | <https://huggingface.co/datasets/tokoroten-jp/generated-tsume-shogi> | released |
 | Training data of the experiments (about 8.05 million diagrams; CC BY 4.0) | <https://huggingface.co/datasets/tokoroten-jp/tsume-gen-m17-pretraining> | released |
-| Generator weights (small, medium and large after pre-training; the large one after 2,000 steps of sibling RL) | <https://huggingface.co/tokoroten-jp/tsume-gen> | released |
+| Generator weights (small, medium and large after pre-training; the large one after 2,000 steps of RL with the solver's verdict as the reward) | <https://huggingface.co/tokoroten-jp/tsume-gen> | released |
 | Solver | `solver/` in this repository | released |
 | Python sample that runs the generator | `examples/` in this repository | released |
-| Training code (pre-training and sibling RL) | this repository | to be added |
+| Training code (pre-training and RL) | this repository | to be added |
 | Mass-production pipeline (generation, judging, reduction, repair by adding a defender piece) | this repository | to be added |
 | Problem generation in the browser | <https://tsume.quest/generate> | live (not part of this repository) |
 
@@ -150,6 +150,6 @@ If you use only the dataset, you may instead cite it as in the CITATION.cff on t
 
 ## Planned
 
-- Training code: extracting training examples from the dataset, pre-training, sibling RL.
+- Training code: extracting training examples from the dataset, pre-training, RL.
 - Mass-production pipeline: generation, solver judging, board reduction, and repair of yozume by adding a defender piece.
 - The full version of the paper (arXiv).
