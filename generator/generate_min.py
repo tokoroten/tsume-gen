@@ -47,8 +47,12 @@ order; each filled slot draws its id from the model's distribution at
   whose round broke a hard rule (more pieces of a type than a shogi set has,
   two unpromoted pawns of one side on a file, a piece that can never move, or
   the defender king already in check) draws that round again, up to 8 times;
-  if it is still illegal, the round's slots are drawn one at a time with the
-  offending ids removed (a check is not looked at in that last step).
+  a round breaks a rule when any one kind of violation grows, even if another
+  kind shrinks in the same round.  If it is still illegal, the round's slots
+  are drawn one at a time with the offending ids removed (a check is not
+  looked at in that last step); a slot whose every allowed id was cut by
+  top-p becomes an empty square (board) or a zero count (hand), so a
+  diagram never holds more pieces of a type than a set has.
 * ``--plain``: shorthand for ``--top-p 1.0 --no-redo-check``.
 
 Same weights, conditions, seed and device type give the same output.
@@ -530,18 +534,24 @@ def king_in_check(tokens) -> torch.Tensor:
 
 
 def violations(tokens, immobile) -> torch.Tensor:
-    """``[B]`` number of hard-rule violations of the filled slots: pieces
+    """``[B, 4]`` hard-rule violations of the filled slots, by kind: pieces
     over the set, extra unpromoted pawns on a file, a check on the defender
-    king, immobile pieces."""
+    king, immobile pieces.  Kept apart so that a round which removes a check
+    cannot pay for a piece over the set (:func:`worse`)."""
     counts, att, dfn = piece_counts(tokens)
     cap = torch.tensor(SET_SIZE, dtype=torch.long, device=tokens.device)
-    out = (counts - cap).clamp_min(0).sum(dim=1)
-    out = out + (att - 1).clamp_min(0).sum(dim=1) + (dfn - 1).clamp_min(0).sum(dim=1)
-    out = out + king_in_check(tokens).long()
+    over = (counts - cap).clamp_min(0).sum(dim=1)
+    pawns = (att - 1).clamp_min(0).sum(dim=1) + (dfn - 1).clamp_min(0).sum(dim=1)
+    check = king_in_check(tokens).long()
     board = tokens[:, :81]
     hit = immobile[torch.arange(81, device=tokens.device).unsqueeze(0),
                    board.clamp(0, N_BOARD_IDS - 1)] & (board < N_BOARD_IDS)
-    return out + hit.sum(dim=1)
+    return torch.stack([over, pawns, check, hit.sum(dim=1)], dim=1)
+
+
+def worse(after, before) -> torch.Tensor:
+    """``[B]``: some kind of violation grew (:func:`violations`)."""
+    return (after > before).any(dim=1)
 
 
 def banned_ids(tokens, immobile):
@@ -587,7 +597,10 @@ def draw(dist, generator, keep=None):
 def fill_one_by_one(tokens, chosen, order, drawn, probs, generator, immobile):
     """Fix the round's chosen slots one at a time in the round's order; a
     slot whose drawn id is banned by the slots fixed before it is drawn again
-    from its own distribution without the banned ids."""
+    from its own distribution without the banned ids.  When top-p left that
+    slot no allowed id, it takes the id that is never banned: an empty board
+    square, or a zero hand count (move slots are never banned).  The draw is
+    still made, so the random stream of every other row is unchanged."""
     cur = tokens.clone()
     rows = torch.arange(tokens.shape[0], device=tokens.device)
     for j in range(order.shape[1]):
@@ -603,6 +616,11 @@ def fill_one_by_one(tokens, chosen, order, drawn, probs, generator, immobile):
             dist = probs[idx, slot[idx]].masked_fill(ban[idx], 0.0)
             tok = tok.clone()
             tok[idx] = draw(dist, generator, keep=tok[idx])
+            none_left = dist.sum(dim=-1) <= 0
+            if bool(none_left.any()):
+                lost = idx[none_left]
+                tok[lost] = torch.where(slot[lost] < BOARD_SLOTS, torch.zeros_like(tok[lost]),
+                                        torch.full_like(tok[lost], HAND_ID0))
         cur[rows, slot] = torch.where(take, tok, cur[rows, slot])
     return cur
 
@@ -613,7 +631,7 @@ def redo_check_round(tokens, chosen, order, drawn, probs, side, immobile, tries=
     exactly as in the plain decode."""
     before = violations(tokens, immobile)
     out = torch.where(chosen, drawn, tokens)
-    bad = violations(out, immobile) > before
+    bad = worse(violations(out, immobile), before)
     for _ in range(tries):
         if not bool(bad.any()):
             break
@@ -621,7 +639,7 @@ def redo_check_round(tokens, chosen, order, drawn, probs, side, immobile, tries=
         dist = probs[idx]
         again = draw(dist.reshape(-1, dist.shape[-1]), side).reshape(dist.shape[:2])
         cand = torch.where(chosen[idx], again, tokens[idx])
-        still = violations(cand, immobile) > before[idx]
+        still = worse(violations(cand, immobile), before[idx])
         out[idx] = torch.where(still.unsqueeze(1), out[idx], cand)
         bad[idx] = still
     if bool(bad.any()):

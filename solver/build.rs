@@ -1,6 +1,6 @@
 //! Embeds the commit the solver is built from as `TSUME_SOLVER_BUILD`
-//! (`tsume_solver::record_clock::SOLVER_BUILD`): the catalog records'
-//! `producer.solverBuild` and the default `--record-solver-id`.
+//! (`tsume_solver::record_clock::SOLVER_BUILD`): the `solverBuild` of the
+//! `--emit-record` records and the default `--record-solver-id`.
 //!
 //! The value is the first 7 hex digits of `HEAD`, with `+dirty` when a file of
 //! this crate (`solver/`, tracked or not, ignored files aside)

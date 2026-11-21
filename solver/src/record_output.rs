@@ -278,7 +278,7 @@ pub(crate) fn output_key(path: &str) -> String {
     }
 }
 
-/// Marks a worker's output line as a catalog record (`--emit-record`), with a
+/// Marks a worker's output line as a side record (`--emit-record`), with a
 /// following `?` a record of status `unknown` (`--emit-unresolved`), or with
 /// a following `!` the reason a judged diagram got none.
 pub(crate) const RECORD_MARK: char = '\u{2}';
@@ -314,7 +314,7 @@ pub(crate) fn create_side_file(path: &str) -> Result<BufWriter<std::fs::File>> {
     Ok(BufWriter::new(file))
 }
 
-/// The catalog records' file: every record in input order (those of status
+/// The `--emit-record` file: every record in input order (those of status
 /// `unknown` in their own file with `--emit-unresolved`), and the counts of
 /// the diagrams that got none.
 pub(crate) struct RecordSink {

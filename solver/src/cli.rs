@@ -50,7 +50,7 @@ pub(crate) enum Command {
         attacker: Option<String>,
         /// Disable the strict-tsume defender remainder.
         /// Experimental (2026-10-22): hidden from `--help`; using it prints a note on
-        /// stderr and tags catalog records `+x`.
+        /// stderr and tags the `--emit-record` records `+x`.
         // docs/experiments/solver-cli-audit/README.md §7.4, §8.
         #[arg(long = "no-strict-material", hide = true)]
         no_strict_material: bool,
@@ -60,11 +60,10 @@ pub(crate) enum Command {
         graph: String,
         /// 無駄合 policy (rule F): `classical` (default since 2026-10-22: prune
         /// plus the classical 無駄合 reading, a check answered only by futile
-        /// interposition drops is mate; what the composition rules use since
-        /// `PIPELINE_VERSION` 0.10.0), `prune`, or `keep` (the bare solver
-        /// contract).  A stdin request may override it per line with
+        /// interposition drops is mate; what the composition rules use),
+        /// `prune`, or `keep` (the bare solver contract).  A stdin request may override it per line with
         /// `"uselessInterposition"`.
-        // Rule F: docs/rules.md.  `keep` is packages/solver's default, which
+        // Rule F: docs/rules.md.  Classical since PIPELINE_VERSION 0.10.0.  `keep` is packages/solver's default, which
         // diff-solve.ts names explicitly.
         #[arg(long, default_value = "classical", value_parser = ["keep", "prune", "classical"])]
         useless_interposition: String,
@@ -113,7 +112,7 @@ pub(crate) enum Command {
         /// one with no step is rejected `yozume_not_reducible`.
         // owner decision 2026-10-09 17:50 JST.
         /// Experimental (2026-10-22): hidden from `--help`; using it prints a note on
-        /// stderr and tags catalog records `+x`.
+        /// stderr and tags the `--emit-record` records `+x`.
         // docs/experiments/solver-cli-audit/README.md §7.4, §8.
         #[arg(long = "no-rule-b-entry", hide = true)]
         no_rule_b_entry: bool,
@@ -231,13 +230,14 @@ pub(crate) enum Command {
     /// is written back unchanged with `extra.reduceAccepted.outcome = "fallback"`
     /// and the reasons.  Rejected input records pass through untouched.
     ///
-    /// `--emit-record` (2026-10-27): the catalog record of every output diagram
+    /// `--emit-record` (2026-10-27): the side record of every output diagram
     /// and, when pieces came off, of the input as a reducible one, judged by
     /// the publishing gate at the record's bound and `--node-budget` (an
     /// `unchanged` or `fallback` record, which the command does not re-solve,
-    /// is judged again on a copy for its record).  `producer.route` defaults to
-    /// `reduce`; the input's `extra.catalogProducer` or `--record-route`
-    /// names the generator.
+    /// is judged again on a copy for its record).  The record's `route`
+    /// defaults to `reduce`; an input record's own override or
+    /// `--record-route` names the generator.
+    // The override: extra.catalogProducer (producer.route).
     ReduceAccepted {
         /// Node budget.  Required since 2026-10-22: a forgotten budget silently
         /// ran one or two orders of magnitude below the production runs'.
@@ -357,7 +357,7 @@ pub(crate) enum Command {
     /// `{"id","verdict":"reject"|"inconclusive","reason","nodes","plyReached"}`
     /// line per input, in input order.  The rules are distill's final rules
     /// (`TsumeRules::puzzle()`, rule F classical), so the walk enforces rule B at
-    /// every length (`PIPELINE_VERSION` 0.12.0).  Publishes nothing.
+    /// every length (since rules version 0.12.0).  Publishes nothing.
     RuleBProbe {
         /// df-pn node budget of one position, over every probe of its walk.
         #[arg(long, default_value_t = 200_000)]
@@ -376,7 +376,7 @@ pub(crate) enum Command {
     /// solving.
     ///
     /// Reads JSONL with `canonicalHash` and `solution` (the solution object, or
-    /// a string holding its JSON, as the catalog stores it) and writes one
+    /// a string holding its JSON) and writes one
     /// `{"canonicalHash","nMainPaths","hasFinalAlt","error"}` line per input, in
     /// input order.  `nMainPaths` is the number of root-to-end paths of the
     /// main-line region exactly as the reducer counts them (rule D,
@@ -390,12 +390,14 @@ pub(crate) enum Command {
         #[command(flatten)]
         parallel: Parallel,
     },
+    // 1.8.0: the catalog's main_line toward this build's tie-break,
+    // PIPELINE_VERSION 0.17.0.
     /// The designated main line of stored solution graphs, without solving
-    /// (1.8.0; the catalog's `main_line` toward this build's tie-break, e.g.
-    /// a promotion before its non-promoting twin, `PIPELINE_VERSION` 0.17.0).
+    /// (since 1.8.0; it follows this build's tie-break, e.g. a promotion
+    /// before its non-promoting twin).
     ///
     /// Reads JSONL with `canonicalHash` and `solution` (the solution object, or
-    /// a string holding its JSON, as the catalog stores it) and writes one
+    /// a string holding its JSON) and writes one
     /// `{"canonicalHash","mainLine","leftoverHand","complete","error"}` line per
     /// input, in input order.  `mainLine` is `exact::designated_main_line` of
     /// the stored graph -- the walk `solve --emit-main-line` writes as
@@ -597,13 +599,13 @@ pub(crate) struct BudgetOutsArgs {
 
 // owner 2026-10-12; docs/catalog/INGEST.md
 // §6, tools/catalog/record.py, tools/catalog/ingest.py.
-/// `--emit-record`: the catalog record (`catalog-record/2`) of every diagram
-/// the publishing gate judged, written to a side file in input order, ready
-/// for a catalog ingest without an adapter.  Off by default; the main output is byte-identical with
-/// it on or off ([`tsume_solver::catalog_record`]).
+/// `--emit-record`: one side record of every diagram the publishing gate
+/// judged, written to a side file in input order.  Off by default; the main
+/// output is byte-identical with it on or off ([`tsume_solver::catalog_record`]).
 #[derive(Args, Clone, Debug)]
 pub(crate) struct RecordArgs {
-    /// Write the catalog records to this JSONL file.
+    /// Write a side record of every judged diagram (verdict, main line,
+    /// solver and rules versions) to this JSONL file, in input order.
     #[arg(long)]
     pub(crate) emit_record: Option<String>,
     /// Write the records of status `unknown` (the gate ran out of budget,
@@ -618,30 +620,31 @@ pub(crate) struct RecordArgs {
     #[arg(long)]
     pub(crate) emit_unresolved: Option<String>,
     /// The binary's id, `S-<7-hex commit>[tag]` (e.g. `S-dd32a41`): the record's
-    /// `solveVersion` is `<id>/<PIPELINE_VERSION>/<gate node budget>`.
+    /// `solveVersion` is `<id>/<rules version>/<gate node budget>`.
     /// Defaults to `S-<the commit the binary was built from>` (`+dirty` when
-    /// the crate's files differed from it; `producer.solverBuild`); required
+    /// the crate's files differed from it; the record's `solverBuild`); required
     /// only for a build that does not know its commit (`solverBuild`
     /// `unknown`).  The tags `+x` and `+pdfpn` are appended either way.
     #[arg(long)]
     pub(crate) record_solver_id: Option<String>,
     // docs/catalog/CATALOG_ORIGINS.md §3.4.
-    /// `producer.producedBy`, the name of the producer.  An input
-    /// record's `extra.catalogProducer` object overrides it (and the route, the
+    /// The record's `producedBy`: who or what made the diagrams.  An input
+    /// record's own override object replaces it (and the route, the
     /// generation, `interesting`, `rankerId`) per record.  Required with
     /// `--emit-record`.
+    // producer.producedBy; the override is extra.catalogProducer.
     #[arg(long)]
     pub(crate) record_produced_by: Option<String>,
-    /// `producer.route`.  `extend`, `distill` and `reduce` default to their own
-    /// name; `solve` needs it.
+    /// The record's `route`.  `extend`, `distill` and `reduce` default to their
+    /// own name; `solve` needs it.
     #[arg(long, value_parser = tsume_solver::catalog_record::ROUTES)]
     pub(crate) record_route: Option<String>,
-    /// `producer.generation` (0 when not given).
+    /// The record's `generation` (0 when not given).
     #[arg(long)]
     pub(crate) record_generation: Option<u64>,
     /// `solve` only: the `reduce.version` of input records that carry a
-    /// `reduction` (`D-v5/<PIPELINE_VERSION>/<reduce node budget>`).  Without it
-    /// their reduce status stays `unknown` (and the ingest refuses a sound one).
+    /// `reduction` (`D-v5/<rules version>/<reduce node budget>`).  Without it
+    /// their reduce status stays `unknown`.
     /// `reduce`, `extend` and `distill` write their own.
     #[arg(long)]
     pub(crate) record_reduce_version: Option<String>,
@@ -774,9 +777,9 @@ pub(crate) struct PositionParallel {
     /// the prober node counts (`stats.nodes` and `stats.nodesProof` count
     /// every thread's expansions) and whether a budget suffices; a search
     /// that runs out stays a budget-out (never re-run on one thread; the
-    /// reducers climb `--reduce-budget-ladder` on the same threads).  Catalog
-    /// records carry the tag `+pdfpn` after the solver id.  `T / P` records
-    /// run at a time (`--threads T`).
+    /// reducers climb `--reduce-budget-ladder` on the same threads).  The
+    /// `--emit-record` records carry the tag `+pdfpn` after the solver id.
+    /// `T / P` records run at a time (`--threads T`).
     #[arg(long, default_value_t = 1)]
     pub(crate) prober_threads: usize,
 }
@@ -792,7 +795,7 @@ impl PositionParallel {
         prober_threads: 1,
     };
 
-    /// The catalog records' solver id: `+pdfpn` appended with a parallel
+    /// The `--emit-record` records' solver id: `+pdfpn` appended with a parallel
     /// prober (counts and budget-outs may vary with the threads, verdicts do
     /// not), so the run stays visible in every record's `solveVersion`
     /// (`S-<commit>[tag]/<pipeline>/<budget>`).  `+par` (the position pool,

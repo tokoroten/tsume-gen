@@ -33,7 +33,7 @@ No account, token, GPU or database is needed. The first setup downloads from rus
 | --- | --- | --- |
 | Rust | Install with rustup. `solver/rust-toolchain.toml` selects the `stable` channel with `rustfmt` and `clippy` (a default rustup install has them). Windows: the MSVC toolchain needs the Visual Studio Build Tools with "Desktop development with C++". Linux: a C linker (`cc`). macOS: `xcode-select --install`. | `cargo --version` |
 | Python | 3.12 (the tested version) | `python3 --version` (Windows: `python --version`) |
-| Disk | About 1.5 GB: the Rust build ~0.5 GB, PyTorch, and the weights (343 MB for a large model, about 30 MB for `sft-small`) | — |
+| Disk | With the CPU build of PyTorch, about 1.5 GB: the Rust build ~0.5 GB, PyTorch, and the weights (343 MB for a large model, about 30 MB for `sft-small`). With the CUDA build (Windows, cu128), the venv alone was about 4.4 GB and pip's cache about 2.6 GB (`--no-cache-dir` keeps none). | — |
 | Memory | About 1.5 GB free for the default run on CPU. The measured peak, including the solver, was 0.6–1.3 GB. | — |
 
 **x86_64 CPUs.** The solver is built for x86-64-v3, which needs AVX2 and BMI2. Most CPUs from about 2015 onward have them.
@@ -151,7 +151,9 @@ python examples/generate_and_judge.py --ply 5 --count 200 --seed 7 --json > out.
 - The script works in batches of `--batch-size` (default 256): generate, judge, write and flush each batch, then the next. Memory follows the batch size, not `--count`, and a stopped run keeps its finished batches.
 - The output is deterministic for (weights, conditions, `--seed`, `--batch-size`, device type). Batch 0 uses `--seed`, later batches a seed derived from it, so a stopped run's rows are the first batches of the full run. Up to `--batch-size` diagrams, the output is the same as without batches.
 - For parallel jobs, give each its own `--seed` and output file.
-- Judging dominates the run time for long mates, because the solver proves non-mates exhaustively.
+- Judging takes more than 90 % of the time; a GPU speeds up only generation. Measured (Ryzen 9 5950X, RTX 3070, `branch-rl-large`, `--threads 8`, batch 256): `--ply 5 --count 1024` generated in 56 s and judged in 628 s.
+- GPU memory grows with `--batch-size`: 1,397 MiB at 256 and 4,573 MiB at 1,024 (`branch-rl-large`, RTX 3070 8 GB). Lower `--batch-size` if CUDA runs out of memory.
+- Each `--json` row ends with `model`, `targetPly`, `seed` and `batchSize` (null with `--sfen`); keep them when sharing puzzles.
 - Use `--threads N` for the solver (the default is all logical cores) and a GPU for generation. Each solver thread has its own search tables, so memory grows with the threads: lower `--threads` if memory runs short (the verdicts do not depend on it).
 - `--skip-reduce` skips the removable-piece check: faster, but such positions are reported as `mate`, not `sound`.
 
@@ -186,6 +188,8 @@ python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b G
 | PyTorch download of several GB | That is the CUDA build. On a machine without a GPU, install the CPU build (section 4). |
 | Hugging Face HTTP errors | Retry, check the proxy, or use `--weights-dir` (section 6). |
 | Many `unknown` verdicts | Raise `--node-budget` (the default is 10,000,000 nodes). |
+| What a reason means (`koma_amari`, `rule_d_removable:b+P@3g`, ...) | README.md, "Reasons" (the squares are USI). |
+| `CUDA out of memory` | Lower `--batch-size`. |
 | Out of memory while judging | Lower `--threads` (each solver thread has its own tables) or `--batch-size`. |
 | `torch.cuda.is_available()` is `False` on a GPU machine | A CPU build of PyTorch is installed. Install the CUDA build (section 4). |
 

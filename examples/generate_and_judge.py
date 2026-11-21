@@ -191,7 +191,8 @@ def judge(samples: list, args, solver: Path, first: int = 0) -> list:
                 if red.get("removed"):
                     res["verdict"] = "reducible"
                     res["reasons"] = ["rule_d_removable:" + ",".join(
-                        "%s@%s" % (p.get("piece"), p.get("square")) if isinstance(p, dict)
+                        "%s@%s" % (p.get("piece"), usi_square(p.get("square")))
+                        if isinstance(p, dict)
                         else str(p) for p in red["removed"])]
                 elif red.get("minimality") == "verified":
                     res["verdict"] = "sound"
@@ -205,13 +206,34 @@ def judge(samples: list, args, solver: Path, first: int = 0) -> list:
     return results
 
 
+def usi_square(square):
+    """The solver's square number (0-80: ``rank * 9 + column``, rank 0 = USI
+    rank ``a``, column 0 = file 9) as a USI square, e.g. 60 -> ``3g``; other
+    values unchanged."""
+    if isinstance(square, int) and 0 <= square < 81:
+        return "%d%s" % (9 - square % 9, "abcdefghi"[square // 9])
+    return square
+
+
+def row_origin(args, meta) -> dict:
+    """Where a ``--json`` row came from: the model (its ``config.json`` name),
+    the target mate length, ``--seed`` and ``--batch-size`` (the diagrams
+    depend on both); all null for ``--sfen``, which generates nothing."""
+    if meta is None:
+        return {"model": None, "targetPly": None, "seed": None, "batchSize": None}
+    return {"model": meta.get("name", args.model), "targetPly": args.ply, "seed": args.seed,
+            "batchSize": args.batch_size}
+
+
 # ---------------------------------------------------------------- main
 
-def print_rows(results: list, args, first: int, out) -> None:
-    """Print one batch (``first``: the run-wide index before it) and flush."""
+def print_rows(results: list, args, first: int, out, origin=None) -> None:
+    """Print one batch (``first``: the run-wide index before it) and flush.
+    ``origin``: the keys every ``--json`` row ends with (:func:`row_origin`)."""
     for n, res in enumerate(results, first + 1):
         if args.json:
-            out.write(json.dumps(dict(res, index=n), ensure_ascii=False) + "\n")
+            row = dict(res, index=n, **(origin or {}))
+            out.write(json.dumps(row, ensure_ascii=False) + "\n")
             continue
         target = "" if res["matePly"] is None or args.sfen else (
             " (target %d)" % args.ply if res["matePly"] != args.ply else "")
@@ -267,7 +289,7 @@ def main(argv=None) -> int:
         tc = time.perf_counter()
         seconds_generate += tb - ta
         seconds_judge += tc - tb
-        print_rows(results, args, first, sys.stdout)
+        print_rows(results, args, first, sys.stdout, row_origin(args, meta))
         for res in results:
             counts[res["verdict"]] = counts.get(res["verdict"], 0) + 1
             if meta is not None and res["verdict"] == "sound" and res["matePly"] == args.ply:

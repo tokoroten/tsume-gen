@@ -55,6 +55,7 @@ python3 -m venv .venv                                   # Windows: py -3.12 -m v
 
 - Windows: PyPI's `torch` is the CPU build (its version ends in `+cpu`). For an NVIDIA GPU, install the CUDA build from PyTorch's own index first, then `requirements.txt` (pip keeps the installed `torch`):
   `.venv\Scripts\python -m pip install torch --index-url https://download.pytorch.org/whl/cu128`
+  The CUDA build is large: on one Windows PC (cu128) the wheel was 2,753 MB, the venv about 4.4 GB and pip's cache about 2.6 GB; add `--no-cache-dir` to keep no cache.
   Pick the `cu` number that your NVIDIA driver supports (`nvidia-smi` shows the highest CUDA version the driver supports; <https://pytorch.org/get-started/locally/> lists the builds). If the `+cpu` build is already installed, remove it first (`.venv\Scripts\python -m pip uninstall torch`); otherwise pip sees `torch` as installed and changes nothing.
 - Linux (x86_64): PyPI's `torch` already includes CUDA, and its download is several GB. Without a GPU, install the CPU build first: `.venv/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`.
 - macOS (Apple silicon): the default `torch` works; use `--device mps` for the GPU.
@@ -67,7 +68,7 @@ Check which build you have (on Windows, `.venv\Scripts\python`):
 
 `True` means `--device cuda` will work; `False` with a version ending in `+cpu` is the CPU build.
 
-**Weights.** The sample downloads the weights from Hugging Face on first use and keeps them in huggingface_hub's cache: `~/.cache/huggingface/hub` (Windows: `%USERPROFILE%\.cache\huggingface\hub`). Set `HF_HOME` to move the cache (it then lives in `$HF_HOME/hub`), or download the files yourself and pass `--weights-dir`.
+**Weights.** The sample downloads the weights from Hugging Face on first use and keeps them in huggingface_hub's cache: `~/.cache/huggingface/hub` (Windows: `%USERPROFILE%\.cache\huggingface\hub`). Set `HF_HOME` to move the cache (it then lives in `$HF_HOME/hub`), or download the files yourself and pass `--weights-dir`. Without a Hugging Face token, huggingface_hub prints a warning about "unauthenticated requests" on each download; it is harmless, and no token or account is needed.
 
 The first setup downloads from rustup, crates.io and PyPI (and download.pytorch.org for the CPU or CUDA build); after that, the only network access is the weight download from Hugging Face.
 
@@ -94,9 +95,34 @@ On x86_64 the build targets x86-64-v3 (AVX2, BMI2; `solver/.cargo/config.toml`, 
 
 [`examples/generate_and_judge.py`](examples/generate_and_judge.py) downloads `<model>/model.safetensors` and `<model>/config.json` from [tokoroten-jp/tsume-gen](https://huggingface.co/tokoroten-jp/tsume-gen) (anonymously; `--weights-dir` uses local files instead), samples `--count` diagrams conditioned on the target mate length `--ply` with the decode of §4.2 and §4.4 of the paper (24 rounds, temperature 1.0, random unmasking order, illegal squares redrawn, top-p 0.95, the defender king on files 1–5), and judges every diagram with the solver: `validate`, `solve` (rules A–C, F, G) and `reduce` (rule D). It prints each diagram (SFEN) with its verdict (`sound`, `reducible`, `mate`, `rejected`, `invalid`, `unknown` or `undecodable`), its mate length and its main line on stdout, and two summary lines on stderr; `--json` prints one JSON object per diagram. `sound` means the diagram passed every rule; `mate` means it passed `solve` but rule D was not checked (`--skip-reduce`); `unknown` means the solver ran out of its node budget before deciding.
 
+**Reasons.** A verdict other than `sound` comes with `reasons` (stdout: `reasons:`; `--json`: the `reasons` list). The common ones:
+
+| Reason | Verdict | Meaning |
+| --- | --- | --- |
+| `no_forced_mate_within_bound` | `rejected` | No forced mate within `--max-ply`. |
+| `defense_coverage_incomplete` | `rejected` | The search could not show a mate against every defence; it comes with `no_forced_mate_within_bound` and similar. |
+| `first_move_not_unique` | `rejected` | More than one first move mates in the minimum number of moves (rule B, at the first move). |
+| `yozume_in_main_line` | `rejected` | Later on the main line an attacker move has an alternative (余詰, rule B). |
+| `koma_amari` | `rejected` | An attacker piece is left in hand at the end (駒余り, rule C). |
+| `inert_attacker_piece`, `inert_defender_piece` | `rejected` | A piece on the board takes no part (rule G). |
+| `rule_d_removable:<side><piece>@<square>` | `reducible` | A piece can be removed and the problem still works (rule D), e.g. `rule_d_removable:b+P@3g` (black's promoted pawn on 3g). Several are separated by commas. |
+| `solver_budget_exhausted`, `incomplete_response_graph`, `minimum_length_not_proven` | `unknown` | The search ran out of `--node-budget` before it could decide. |
+| `rule_d_unverified` | `unknown` | The removal check ran out of budget: no removable piece was found, but that is not proven. |
+| `material`, `nifu`, `dead_piece`, `defender_king`, `defender_already_checked` | `invalid` | Not a legal tsume position: more pieces of a type than a set has, two unpromoted pawns on a file, a piece that can never move, not exactly one defender king, the defender already in check. |
+
+Squares in the reasons are USI squares (file 1–9, rank `a`–`i`). In the solver's own records (the `reduce` stage's `reduction.removed`), a square is a number 0–80 instead: `rank * 9 + column`, with rank 0 = `a` and column 0 = file 9, so square `n` is file `9 - n % 9`, rank `"abcdefghi"[n // 9]` (60 is `3g`, 0 is `9a`, 80 is `1i`).
+
+**`line` and the main line.** `line` is the model's own guess at the first three moves, made together with the diagram; `mainLine` is the solver's designated main line. They often differ, even for a `sound` diagram. For example (run with `--ply 5 --seed 7 --json` on a GPU), the model proposed `4a3a 3b3a 2e3c`, while the solver's main line plays `G*1b` as the third move and `2e3c+` only as the fifth:
+
+```
+{"sfen": "5Ggk1/5Sg2/8S/9/7N1/9/9/9/9 b - 1", "line": ["4a3a", "3b3a", "2e3c"], "verdict": "sound", "reasons": [], "matePly": 5, "mainLine": ["4a3a", "3b3a", "G*1b", "2a3b", "2e3c+"], "normalizedSfen": "5Ggk1/5Sg2/8S/9/7N1/9/9/9/9 b 2r2bg2s3n4l18p 1", "index": 19, "model": "branch-rl-large", "targetPly": 5, "seed": 7, "batchSize": 256}
+```
+
+Each `--json` row ends with where it came from: `model` (the name in the weights' `config.json`), `targetPly` (`--ply`), `seed` (`--seed`) and `batchSize` (`--batch-size`; the diagrams depend on it, see the next section). With `--sfen` these four are `null`. They are in every `--json` row so that the output of several runs can be mixed and still traced, and so that shared diagrams keep their origin (see "Where the data comes from"). The plain text output has none of them.
+
 - `--model`: `sft-small`, `sft-medium`, `sft-large`, `branch-rl-large` (the default, the weights of the paper) or `branch-rl-large-ema`; also the comparison runs on the model card, `rl-indep-large-s0`, `rl-indep-large-s1`, `rl-branchonly-large-s0` and `rl-branchonly-large-s1`, each also with `-ema`. For weights in another Hugging Face repository use `--repo-id` (and `--revision`); for files on disk, `--weights-dir DIR` (a directory with `config.json` and `model.safetensors`; nothing is downloaded).
 - `--ply` (1, 3, 5, 7, 9 or 11), `--count`, `--seed`, `--device` (`cpu`, `cuda`, `cuda:N` or `mps`); `--defenders` (`0`–`5` or `6+`) conditions on the number of the defender's pieces on the board, king not counted (default: unspecified).
-- Decoding: `--rounds` (default 24), `--temperature` (default 1.0), `--top-p` (default 0.95; 1.0 turns it off) and `--no-redo-check` (turns off redrawing a round that broke a hard rule). `--plain` is short for `--top-p 1.0 --no-redo-check`. The defaults are the paper's decoding.
+- Decoding: `--rounds` (default 24), `--temperature` (default 1.0), `--top-p` (default 0.95; 1.0 turns it off) and `--no-redo-check` (turns off redrawing a round that broke a hard rule). `--plain` is short for `--top-p 1.0 --no-redo-check`. The defaults are the paper's decoding. With redo-check, a diagram never has more pieces of a type than a shogi set, two unpromoted pawns of one side on a file, or a piece that can never move (a check on the defender king can still slip through its last step); without it, such diagrams are reported as `invalid`.
 - `--solver` (or the environment variable `TSUME_SOLVER_BIN`) names the solver binary; `--skip-reduce` skips rule D; `--threads` sets the solver's threads (default: all cores; see "Threads and memory").
 - `--max-ply` is the solver's search bound. The default 13 is for speed; the paper judged up to 15 plies, and `--max-ply 15` sets the same bound. That matches the judge's bound only: it does not by itself reproduce the paper's evaluation numbers, which also depend on the samples, conditions and decoding used there. With 13, a diagram whose only mate takes 15 plies is reported as not mating.
 - `--sfen SFEN` (repeatable) judges the given positions instead of generating; no model is loaded.
@@ -117,6 +143,8 @@ Use `--json` and redirect stdout to a file; each line is one diagram with its ve
 - The script works in batches of `--batch-size` diagrams (default 256): it generates a batch, judges it, writes its rows, flushes the output, and goes on with the next batch. The memory depends on the batch size, not on `--count`, and a run that stops early keeps every batch it finished. With more than one batch, stderr gets one progress line per batch.
 - The diagrams depend on the weights, the conditions, `--seed`, `--batch-size` and the device type. Batch 0 uses `--seed` itself, and each later batch a seed derived from `--seed` and its number, so the rows of a stopped run are the first complete batches of the full run. With `--count` at most `--batch-size`, the output is the same as before batches existed; another `--batch-size` gives other diagrams once `--count` is larger than it.
 - To run several jobs side by side, give each its own `--seed` and output file. Mind memory: each job runs its own solver, which uses every core unless `--threads` says otherwise.
+- Time: judging takes more than 90 % of a run, and a GPU speeds up only the generation. Measured on one PC (Ryzen 9 5950X, RTX 3070, `branch-rl-large`, `--device cuda`, `--threads 8`, `--batch-size 256`): `--ply 5 --count 1024` took 56 s to generate and 628 s to judge; `--ply 7 --count 512`, 28 s and 215 s. More solver threads (`--threads`, mind the memory) shorten the judging; long target mates take longer.
+- GPU memory grows with `--batch-size`. Measured with `branch-rl-large` on an RTX 3070 (8 GB), peak `torch.cuda.max_memory_allocated`: 1,397 MiB at 256 diagrams per batch and 4,573 MiB at 1,024. On an 8 GB card that also drives the display, a batch of about 1,800 would likely not fit (not tried). If the GPU runs out of memory, lower `--batch-size`.
 - Keep the rows whose `verdict` is `sound` (the ones that passed every rule). Judging dominates the run time for long mates, because the solver proves non-mates exhaustively; `--skip-reduce` is faster but reports such diagrams as `mate`, not `sound`.
 
 ### The generator on its own

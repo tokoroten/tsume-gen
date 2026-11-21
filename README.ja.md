@@ -55,6 +55,7 @@ python3 -m venv .venv                                   # Windows: py -3.12 -m v
 
 - Windows: PyPI の `torch` は CPU 版です（版の末尾が `+cpu`）。NVIDIA の GPU を使うときは、先に PyTorch の配布元から CUDA 版を入れ、そのあと `requirements.txt` を入れます（入っている `torch` はそのまま使われます）:
   `.venv\Scripts\python -m pip install torch --index-url https://download.pytorch.org/whl/cu128`
+  CUDA 版は大きいです: Windows の PC 1 台（cu128）で、wheel が 2,753 MB、venv が約 4.4 GB、pip のキャッシュが約 2.6 GB でした。キャッシュを残さないなら `--no-cache-dir` を付けます。
   `cu` の番号は NVIDIA のドライバが対応するものを選びます（ドライバが対応する CUDA の最大の版は `nvidia-smi` に出ます。版の一覧は <https://pytorch.org/get-started/locally/>）。`+cpu` 版がもう入っているときは、先に外してください（`.venv\Scripts\python -m pip uninstall torch`）。外さないと pip は `torch` が入っているとみなし、何も変えません。
 - Linux（x86_64）: PyPI の `torch` は CUDA 込みで、ダウンロードが数 GB あります。GPU が無ければ、先に CPU 版を入れます: `.venv/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`。
 - macOS（Apple silicon）: 既定の `torch` で動きます。GPU は `--device mps` で使います。
@@ -67,7 +68,7 @@ python3 -m venv .venv                                   # Windows: py -3.12 -m v
 
 `True` なら `--device cuda` が使えます。`False` で版の末尾が `+cpu` なら CPU 版です。
 
-**重み。** サンプルは初めて使うときに Hugging Face から重みをダウンロードし、huggingface_hub のキャッシュに置きます: `~/.cache/huggingface/hub`（Windows は `%USERPROFILE%\.cache\huggingface\hub`）。環境変数 `HF_HOME` でキャッシュの場所を変えられます（`$HF_HOME/hub` になります）。自分でファイルを取ってきて `--weights-dir` で渡すこともできます。
+**重み。** サンプルは初めて使うときに Hugging Face から重みをダウンロードし、huggingface_hub のキャッシュに置きます: `~/.cache/huggingface/hub`（Windows は `%USERPROFILE%\.cache\huggingface\hub`）。環境変数 `HF_HOME` でキャッシュの場所を変えられます（`$HF_HOME/hub` になります）。自分でファイルを取ってきて `--weights-dir` で渡すこともできます。Hugging Face のトークンが無いと、huggingface_hub はダウンロードのたびに "unauthenticated requests" の警告を出します。無害で、トークンもアカウントも要りません。
 
 最初の準備では rustup・crates.io・PyPI（CPU 版や CUDA 版を入れるときは download.pytorch.org も）からダウンロードします。そのあとのネットワークの利用は、Hugging Face からの重みのダウンロードだけです。
 
@@ -94,9 +95,34 @@ x86_64 では x86-64-v3（AVX2・BMI2）向けにビルドします（`solver/.c
 
 [`examples/generate_and_judge.py`](examples/generate_and_judge.py) は [tokoroten-jp/tsume-gen](https://huggingface.co/tokoroten-jp/tsume-gen) から `<model>/model.safetensors` と `<model>/config.json` を匿名で取得し（`--weights-dir` で手元のファイルを使うこともできます）、目標の手数 `--ply` を条件に、論文の §4.2・§4.4 の復号（24 ラウンド、温度 1.0、ランダムな順にマスクを外す、反則のマスの引き直し、top-p 0.95、玉方の玉は 1〜5 筋）で `--count` 個の図を生成し、すべての図をソルバで判定します: `validate`、`solve`（規約 A〜C・F・G）、`reduce`（規約 D）。図ごとに SFEN、判定（`sound`・`reducible`・`mate`・`rejected`・`invalid`・`unknown`・`undecodable`）、詰みの手数と主線を標準出力に出し、要約の 2 行を標準エラーに出します。`--json` を付けると図ごとに 1 つの JSON を出します。`sound` はすべての規約を満たした図です。`mate` は `solve` を通ったが規約 D を調べていない図（`--skip-reduce`）、`unknown` はソルバが判定の前に予算を使い切った図です。
 
+**理由（reasons）。** `sound` 以外の判定には `reasons` が付きます（標準出力は `reasons:` の行、`--json` は `reasons` のリスト）。よく出るものは次のとおりです。
+
+| 理由 | 判定 | 意味 |
+| --- | --- | --- |
+| `no_forced_mate_within_bound` | `rejected` | `--max-ply` までに詰みが無い。 |
+| `defense_coverage_incomplete` | `rejected` | すべての応手に対する詰みを示せなかった。`no_forced_mate_within_bound` などと一緒に出ます。 |
+| `first_move_not_unique` | `rejected` | 最短で詰む初手が 2 つ以上ある（規約 B の初手）。 |
+| `yozume_in_main_line` | `rejected` | 主線の途中の攻方の手に別の詰め方がある（余詰、規約 B）。 |
+| `koma_amari` | `rejected` | 詰んだときに攻方の持駒が余る（駒余り、規約 C）。 |
+| `inert_attacker_piece`・`inert_defender_piece` | `rejected` | 盤上に関与しない駒がある（規約 G）。 |
+| `rule_d_removable:<手番><駒>@<マス>` | `reducible` | 外しても問題が成り立つ駒がある（規約 D）。例: `rule_d_removable:b+P@3g`（先手の 3g のと金）。複数あるときはカンマで区切ります。 |
+| `solver_budget_exhausted`・`incomplete_response_graph`・`minimum_length_not_proven` | `unknown` | 判定の前に `--node-budget` を使い切った。 |
+| `rule_d_unverified` | `unknown` | 駒を外せるかの確かめが予算切れ。外せる駒は見つからなかったが、証明はできていない。 |
+| `material`・`nifu`・`dead_piece`・`defender_king`・`defender_already_checked` | `invalid` | 詰将棋の局面として正しくない: 一揃いより多い駒、二歩、動けない駒、玉方の玉が 1 枚でない、玉方が既に王手されている。 |
+
+reasons のマスは USI のマス（筋 1〜9、段 `a`〜`i`）です。ソルバ自身のレコード（`reduce` の段の `reduction.removed`）では、マスは 0〜80 の番号です: `段 * 9 + 列`（段 0 = `a`、列 0 = 9 筋）。番号 `n` は筋 `9 - n % 9`、段 `"abcdefghi"[n // 9]` です（60 は `3g`、0 は `9a`、80 は `1i`）。
+
+**`line` と主線。** `line` は、モデルが図と一緒に出した最初の 3 手の見込みです。`mainLine` はソルバが決めた主線です。`sound` の図でも、よく違います。たとえば（GPU で `--ply 5 --seed 7 --json`）、モデルは `4a3a 3b3a 2e3c` と出しましたが、ソルバの主線は 3 手目に `G*1b` を打ち、`2e3c+` は 5 手目です:
+
+```
+{"sfen": "5Ggk1/5Sg2/8S/9/7N1/9/9/9/9 b - 1", "line": ["4a3a", "3b3a", "2e3c"], "verdict": "sound", "reasons": [], "matePly": 5, "mainLine": ["4a3a", "3b3a", "G*1b", "2a3b", "2e3c+"], "normalizedSfen": "5Ggk1/5Sg2/8S/9/7N1/9/9/9/9 b 2r2bg2s3n4l18p 1", "index": 19, "model": "branch-rl-large", "targetPly": 5, "seed": 7, "batchSize": 256}
+```
+
+`--json` の各行の最後には、どこから来た図かが入ります: `model`（重みの `config.json` の名前）、`targetPly`（`--ply`）、`seed`（`--seed`）、`batchSize`（`--batch-size`。図はこれにもよります。次の節を参照）。`--sfen` のときは 4 つとも `null` です。いくつもの実行の出力を混ぜても、どの条件の図か追えるように、また図を配るときに由来が残るように（「データの由来」）、`--json` の行には必ず入れます。文字の出力には入りません。
+
 - `--model`: `sft-small`・`sft-medium`・`sft-large`・`branch-rl-large`（既定、論文で使った重み）・`branch-rl-large-ema`。モデルカードにある比べの重み `rl-indep-large-s0`・`rl-indep-large-s1`・`rl-branchonly-large-s0`・`rl-branchonly-large-s1`（それぞれ `-ema` 付きも）も選べます。別の Hugging Face のリポジトリの重みは `--repo-id`（と `--revision`）で、手元のファイルは `--weights-dir DIR`（`config.json` と `model.safetensors` のあるディレクトリ。ダウンロードはしません）で使います。
 - `--ply`（1・3・5・7・9・11）、`--count`、`--seed`、`--device`（`cpu`・`cuda`・`cuda:N`・`mps`）。`--defenders`（`0`〜`5`・`6+`）は玉方の盤上の駒の数（玉を除く）を条件にします（既定は指定なし）。
-- 復号: `--rounds`（既定 24）、`--temperature`（既定 1.0）、`--top-p`（既定 0.95。1.0 で無効）、`--no-redo-check`（規則を破ったラウンドの引き直しをやめる）。`--plain` は `--top-p 1.0 --no-redo-check` と同じです。既定は論文の復号です。
+- 復号: `--rounds`（既定 24）、`--temperature`（既定 1.0）、`--top-p`（既定 0.95。1.0 で無効）、`--no-redo-check`（規則を破ったラウンドの引き直しをやめる）。`--plain` は `--top-p 1.0 --no-redo-check` と同じです。既定は論文の復号です。redo-check があれば、一揃いより多い駒、同じ側の二歩、動けない駒のある図は出ません（玉方の玉への王手は、最後の段で残ることがあります）。redo-check が無ければ、そうした図は `invalid` と出ます。
 - `--solver`（または環境変数 `TSUME_SOLVER_BIN`）でソルバの実行ファイルを指定します。`--skip-reduce` で規約 D を飛ばします。`--threads` はソルバのスレッド数です（既定はすべてのコア。「スレッドとメモリ」を参照）。
 - `--max-ply` はソルバの探索の上限です。既定の 13 は速さのためで、論文の判定は 15 手までです。`--max-ply 15` で同じ上限になります。合うのは判定の上限だけで、論文の評価の数値は、そこで使った標本・条件・復号にもよるので、これだけでは再現しません。13 のままだと、15 手でしか詰まない図は「詰まない」と出ます。
 - `--sfen SFEN` を付けると、生成のかわりに与えた局面を判定します（何回でも付けられます。モデルは読み込みません）。
@@ -117,6 +143,8 @@ CPU で `branch-rl-large` を `--ply 3 --count 8` で動かすと、読み込み
 - サンプルは `--batch-size` 個（既定 256）ずつ進みます: 1 バッチを生成し、判定し、その行を書いて出力を flush し、次のバッチへ進みます。メモリは `--count` ではなくバッチの大きさで決まり、途中で止まっても、終わったバッチの行は残ります。バッチが 2 つ以上あるときは、バッチごとに進み具合を 1 行、標準エラーに出します。
 - 出る図は、重み・条件・`--seed`・`--batch-size`・デバイスの種類で決まります。バッチ 0 は `--seed` そのものを、それより後のバッチは `--seed` とバッチの番号から作った seed を使います。なので、途中で止まった実行の行は、最後まで走った実行の先頭の（終わった）バッチと同じです。`--count` が `--batch-size` 以下なら、バッチが入る前と同じ出力です。`--count` が `--batch-size` を超えると、`--batch-size` を変えれば違う図が出ます。
 - いくつも並べて走らせるときは、それぞれに別の `--seed` と出力ファイルを渡します。メモリに気をつけてください。それぞれが自分のソルバを動かし、`--threads` を付けなければ、どれもすべてのコアを使います。
+- 時間: 実行の 9 割以上は判定で、GPU が速くするのは生成だけです。PC 1 台（Ryzen 9 5950X、RTX 3070、`branch-rl-large`、`--device cuda`、`--threads 8`、`--batch-size 256`）で測ると、`--ply 5 --count 1024` は生成 56 秒・判定 628 秒、`--ply 7 --count 512` は 28 秒・215 秒でした。ソルバのスレッド（`--threads`。メモリに注意）を増やすと判定が短くなります。目標の手数が長いほど時間がかかります。
+- GPU のメモリは `--batch-size` に比例して増えます。RTX 3070（8 GB）で `branch-rl-large` を測ると、ピーク（`torch.cuda.max_memory_allocated`）は 1 バッチ 256 図で 1,397 MiB、1,024 図で 4,573 MiB でした。画面の表示にも使っている 8 GB のカードでは、1,800 図前後で足りなくなりそうです（試していません）。GPU のメモリが足りなくなったら `--batch-size` を下げてください。
 - 残すのは `verdict` が `sound` の行（すべての規約を通った図）です。長い詰みでは判定が時間の大半を占めます（ソルバは詰まないことを網羅的に確かめるため）。`--skip-reduce` は速くなりますが、その図は `sound` ではなく `mate` と出ます。
 
 ### 生成器だけを使う
