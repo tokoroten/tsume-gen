@@ -781,8 +781,16 @@ def decoding_kwargs(args) -> dict:
     return dict(rounds=args.rounds, temperature=args.temperature, top_p=top_p, redo_check=redo)
 
 
+def lf_stdout() -> None:
+    """Write ``\\n`` line ends on stdout on every OS (Windows would write
+    ``\\r\\n``), so the JSON lines are the same bytes everywhere."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    lf_stdout()
     weights = Path(args.weights_dir) if args.weights_dir else fetch_weights(
         args.model, args.repo_id, args.revision)
     model, _meta = load_model(weights, args.device)

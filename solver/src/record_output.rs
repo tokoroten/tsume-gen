@@ -486,9 +486,8 @@ pub(crate) struct BudgetLadder {
     // owner 2026-10-23.
     /// Budget ladder of the reducer's checks: ascending node budgets,
     /// comma-separated, the last equal to `--node-budget`, e.g.
-    /// `10000000,50000000` (50,000,000 is the top rung the production runs
-    /// use since 2026-10-23; a convention, not enforced here).  Every
-    /// acceptance test and entry check runs on the first budget; one that ran out of it
+    /// `10000000,50000000`.  Every acceptance test and entry check runs on the
+    /// first budget; one that ran out of it
     /// (`solver_budget_exhausted` / `incomplete_response_graph`, or
     /// `minimum_length_not_proven`, which the shorter minimality search gives
     /// only by running out) runs again on the next.  Every rung runs on the
@@ -497,9 +496,11 @@ pub(crate) struct BudgetLadder {
     /// budget alone (`src/reduce.rs` `BUDGET_LADDER`); with a parallel prober
     /// only whether a check resolved within its budget may differ, as without
     /// the ladder.  A check out of budget on the last rung stays a budget-out
-    /// (2026-10-23: never re-run on one thread; the record's
-    /// `reduction.minimality` is then `unverified`, and `--emit-budget-outs`
-    /// lists it).  At most 3 smaller rungs.
+    /// (never re-run on one thread; the record's `reduction.minimality` is
+    /// then `unverified`, and `--emit-budget-outs` lists it).  At most 3
+    /// smaller rungs.
+    // 50,000,000 is the top rung the catalogue runs use since 2026-10-23 (a
+    // convention, not enforced here).
     #[arg(long = "reduce-budget-ladder", value_delimiter = ',')]
     pub(crate) reduce_budget_ladder: Vec<u64>,
 }

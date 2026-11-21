@@ -248,6 +248,7 @@ def print_rows(results: list, args, first: int, out, origin=None) -> None:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    gm.lf_stdout()   # LF line ends on every OS
     if args.batch_size < 1:
         raise SystemExit("--batch-size must be at least 1")
     if args.count < 0:
