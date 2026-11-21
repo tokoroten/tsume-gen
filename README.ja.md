@@ -34,41 +34,106 @@
 
 ## 使い方
 
+特に書いていなければ、コマンドはリポジトリのルートで実行します。
+
+### 準備
+
+**Rust**（ソルバ用）。[rustup](https://rustup.rs/) で入れます。`solver/rust-toolchain.toml` は `stable` のチャンネル（決まった版ではありません）と `rustfmt`・`clippy` を指定していて、rustup の既定の入れ方でそろいます。`solver/` の中で `cargo` を動かすと、それが使われます。
+
+- Windows: 既定のツールチェーン（`x86_64-pc-windows-msvc`）は Microsoft の C++ ビルドツールでリンクします。Visual Studio Build Tools を「C++ によるデスクトップ開発」のワークロード付きで入れてください（無いときは rustup のインストーラが入れるかどうかを尋ねます）。
+- Linux: C のリンカ（`cc`。`build-essential` や `gcc` など）。
+- macOS: Xcode のコマンドラインツール（`xcode-select --install`）。
+
+**Python** 3.12 と仮想環境。以下のコマンドは仮想環境の Python をパスで呼ぶので、activate は要りません。Linux と macOS は `.venv/bin/python`、Windows は `.venv\Scripts\python` です。
+
+```bash
+python3 -m venv .venv                                   # Windows: py -3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt     # Windows: .venv\Scripts\python -m pip install -r requirements.txt
+```
+
+**PyTorch（CPU 版か GPU 版か）。** ここにあるものはすべて CPU で動きます（既定は `--device cpu`。下の時間も CPU のものです）。GPU 版は無くてもかまいません。`pip install -r requirements.txt` で入る版は OS によって違います。
+
+- Windows: PyPI の `torch` は CPU 版です（版の末尾が `+cpu`）。NVIDIA の GPU を使うときは、先に PyTorch の配布元から CUDA 版を入れ、そのあと `requirements.txt` を入れます（入っている `torch` はそのまま使われます）:
+  `.venv\Scripts\python -m pip install torch --index-url https://download.pytorch.org/whl/cu128`
+  `cu` の番号は NVIDIA のドライバが対応するものを選びます（ドライバが対応する CUDA の最大の版は `nvidia-smi` に出ます。版の一覧は <https://pytorch.org/get-started/locally/>）。`+cpu` 版がもう入っているときは、先に外してください（`.venv\Scripts\python -m pip uninstall torch`）。外さないと pip は `torch` が入っているとみなし、何も変えません。
+- Linux（x86_64）: PyPI の `torch` は CUDA 込みで、ダウンロードが数 GB あります。GPU が無ければ、先に CPU 版を入れます: `.venv/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`。
+- macOS（Apple silicon）: 既定の `torch` で動きます。GPU は `--device mps` で使います。
+
+どの版が入ったかを確かめます（Windows は `.venv\Scripts\python`）:
+
+```bash
+.venv/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+`True` なら `--device cuda` が使えます。`False` で版の末尾が `+cpu` なら CPU 版です。
+
+**重み。** サンプルは初めて使うときに Hugging Face から重みをダウンロードし、huggingface_hub のキャッシュに置きます: `~/.cache/huggingface/hub`（Windows は `%USERPROFILE%\.cache\huggingface\hub`）。環境変数 `HF_HOME` でキャッシュの場所を変えられます（`$HF_HOME/hub` になります）。自分でファイルを取ってきて `--weights-dir` で渡すこともできます。
+
+最初の準備では rustup・crates.io・PyPI（CPU 版や CUDA 版を入れるときは download.pytorch.org も）からダウンロードします。そのあとのネットワークの利用は、Hugging Face からの重みのダウンロードだけです。
+
 ### ソルバ
 
 ```bash
 cd solver
-cargo build --release            # target/release/tsume-solver
+cargo build --release            # target/release/tsume-solver（Windows は tsume-solver.exe）
 ./target/release/tsume-solver --help
 ./target/release/tsume-solver solve-sfen "4k4/9/4P4/9/9/9/9/9/9 b G 1" --max-ply 3
 cd ..                            # リポジトリのルートに戻る
 ```
 
+x86_64 では x86-64-v3（AVX2・BMI2）向けにビルドします（`solver/.cargo/config.toml`。cargo を `solver/` の中で動かしたときだけ読まれます）。これらの命令が無い CPU では、ソルバは illegal instruction のエラーで止まります。`RUSTFLAGS="-C target-cpu=x86-64" cargo build --release`（PowerShell では `$env:RUSTFLAGS="-C target-cpu=x86-64"; cargo build --release`）でビルドし直してください。出力は同じで、少し遅くなります。段と、それぞれが確かめる規約は [solver/README.md](solver/README.md) にあります。
+
+**スレッドとメモリ。** `validate`・`solve`・`reduce` の段は `--threads N` を取り、既定はすべての論理コアです。各スレッドは 1 度に 1 つのレコードを、自分の探索の表を使って判定します。表は探索したノードの数（`--node-budget` まで）に応じて大きくなるので、ソルバのメモリのピークはスレッド数とともに増えます。メモリが足りなくなったら `--threads` を下げてください（サンプルは自分の `--threads` をソルバに渡します）。判定と出力の順はスレッド数によりません。
+
 ### 生成のサンプル
 
-ソルバのビルドには Rust が要ります。`solver/rust-toolchain.toml` が stable のツールチェーンを指定しています（`rustup` があれば `cargo` が自動で選びます）。x86_64 では x86-64-v3（AVX2・BMI2）向けにビルドします。段と、それぞれが確かめる規約は [solver/README.md](solver/README.md) にあります。
-
-サンプルには Python 3.12 と [requirements.txt](requirements.txt) のパッケージ（PyTorch・NumPy・safetensors・huggingface_hub）、上でビルドしたソルバが要ります。次のコマンドはリポジトリのルートで実行します。
-
 ```bash
-python3 -m venv .venv                                   # Windows: py -3.12 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt     # Windows: .venv\Scripts\python -m pip install -r requirements.txt
 .venv/bin/python examples/generate_and_judge.py --model branch-rl-large --ply 3 --count 8
+# Windows: .venv\Scripts\python examples/generate_and_judge.py --model branch-rl-large --ply 3 --count 8
 ```
-
-最初の準備では rustup・crates.io・PyPI からダウンロードします。そのあとのネットワークの利用は、Hugging Face からの重みのダウンロードだけです。
 
 [`examples/generate_and_judge.py`](examples/generate_and_judge.py) は [tokoroten-jp/tsume-gen](https://huggingface.co/tokoroten-jp/tsume-gen) から `<model>/model.safetensors` と `<model>/config.json` を匿名で取得し（`--weights-dir` で手元のファイルを使うこともできます）、目標の手数 `--ply` を条件に、論文の §4.2・§4.4 の復号（24 ラウンド、温度 1.0、ランダムな順にマスクを外す、反則のマスの引き直し、top-p 0.95、玉方の玉は 1〜5 筋）で `--count` 個の図を生成し、すべての図をソルバで判定します: `validate`、`solve`（規約 A〜C・F・G）、`reduce`（規約 D）。図ごとに SFEN、判定（`sound`・`reducible`・`mate`・`rejected`・`invalid`・`unknown`・`undecodable`）、詰みの手数と主線を標準出力に出し、要約の 2 行を標準エラーに出します。`--json` を付けると図ごとに 1 つの JSON を出します。`sound` はすべての規約を満たした図です。`mate` は `solve` を通ったが規約 D を調べていない図（`--skip-reduce`）、`unknown` はソルバが判定の前に予算を使い切った図です。
 
-- `--model`: `sft-small`・`sft-medium`・`sft-large`・`branch-rl-large`（既定、論文で使った重み）・`branch-rl-large-ema`。
+- `--model`: `sft-small`・`sft-medium`・`sft-large`・`branch-rl-large`（既定、論文で使った重み）・`branch-rl-large-ema`。モデルカードにある比べの重み `rl-indep-large-s0`・`rl-indep-large-s1`・`rl-branchonly-large-s0`・`rl-branchonly-large-s1`（それぞれ `-ema` 付きも）も選べます。別の Hugging Face のリポジトリの重みは `--repo-id`（と `--revision`）で、手元のファイルは `--weights-dir DIR`（`config.json` と `model.safetensors` のあるディレクトリ。ダウンロードはしません）で使います。
 - `--ply`（1・3・5・7・9・11）、`--count`、`--seed`、`--device`（`cpu`・`cuda`・`cuda:N`・`mps`）。`--defenders`（`0`〜`5`・`6+`）は玉方の盤上の駒の数（玉を除く）を条件にします（既定は指定なし）。
 - 復号: `--rounds`（既定 24）、`--temperature`（既定 1.0）、`--top-p`（既定 0.95。1.0 で無効）、`--no-redo-check`（規則を破ったラウンドの引き直しをやめる）。`--plain` は `--top-p 1.0 --no-redo-check` と同じです。既定は論文の復号です。
-- `--solver`（または環境変数 `TSUME_SOLVER_BIN`）でソルバの実行ファイルを指定します。`--skip-reduce` で規約 D を飛ばします。`--threads` はソルバのスレッド数です（既定はすべてのコア）。
+- `--solver`（または環境変数 `TSUME_SOLVER_BIN`）でソルバの実行ファイルを指定します。`--skip-reduce` で規約 D を飛ばします。`--threads` はソルバのスレッド数です（既定はすべてのコア。「スレッドとメモリ」を参照）。
 - `--max-ply` はソルバの探索の上限です。既定の 13 は速さのためで、論文の判定は 15 手までです。`--max-ply 15` で同じ上限になります。合うのは判定の上限だけで、論文の評価の数値は、そこで使った標本・条件・復号にもよるので、これだけでは再現しません。13 のままだと、15 手でしか詰まない図は「詰まない」と出ます。
 - `--sfen SFEN` を付けると、生成のかわりに与えた局面を判定します（何回でも付けられます。モデルは読み込みません）。
+- `--batch-size`（既定 256）: 次の節を参照。
 - 同じ seed と同じ種類のデバイスなら、生成は決定的です。デバイスが違うと、同じ seed でも違う図が出ます。
 
-CPU で `branch-rl-large` を `--ply 3 --count 8` で動かすと、読み込みが 1 秒未満（ダウンロードの後）、生成が 7〜8 秒、判定が 14〜19 秒で、メモリのピークはソルバを含めて 0.6〜1.3 GB です（時間は Windows の PC 1 台で、メモリは Windows と macOS で測りました）。初回は重みを 343 MB ダウンロードします（huggingface_hub がキャッシュします）。GPU（`--device cuda`、CUDA 版の PyTorch が要ります）でのメモリは測っていません。1〜2 GB ほどの見込みです。`--model sft-small`（約 30 MB）でも動き、より速く終わります。
+CPU で `branch-rl-large` を `--ply 3 --count 8` で動かすと、読み込みが 1 秒未満（ダウンロードの後）、生成が 7〜8 秒、判定が 14〜19 秒で、メモリのピークはソルバを含めて 0.6〜1.3 GB です（時間は Windows の PC 1 台で、メモリは Windows と macOS で測りました）。初回は重みを 343 MB ダウンロードします（キャッシュの場所は上の「重み」）。GPU（`--device cuda`、CUDA 版の PyTorch が要ります）でのメモリは測っていません。1〜2 GB ほどの見込みです。`--model sft-small`（約 30 MB）でも動き、より速く終わります。
+
+### たくさん作る
+
+`--json` を付けて標準出力をファイルに向けます。1 行が 1 つの図とその判定です:
+
+```bash
+.venv/bin/python examples/generate_and_judge.py --ply 5 --count 10000 --seed 7 --json > out.jsonl
+# Windows: .venv\Scripts\python examples/generate_and_judge.py --ply 5 --count 10000 --seed 7 --json > out.jsonl
+```
+
+- サンプルは `--batch-size` 個（既定 256）ずつ進みます: 1 バッチを生成し、判定し、その行を書いて出力を flush し、次のバッチへ進みます。メモリは `--count` ではなくバッチの大きさで決まり、途中で止まっても、終わったバッチの行は残ります。バッチが 2 つ以上あるときは、バッチごとに進み具合を 1 行、標準エラーに出します。
+- 出る図は、重み・条件・`--seed`・`--batch-size`・デバイスの種類で決まります。バッチ 0 は `--seed` そのものを、それより後のバッチは `--seed` とバッチの番号から作った seed を使います。なので、途中で止まった実行の行は、最後まで走った実行の先頭の（終わった）バッチと同じです。`--count` が `--batch-size` 以下なら、バッチが入る前と同じ出力です。`--count` が `--batch-size` を超えると、`--batch-size` を変えれば違う図が出ます。
+- いくつも並べて走らせるときは、それぞれに別の `--seed` と出力ファイルを渡します。メモリに気をつけてください。それぞれが自分のソルバを動かし、`--threads` を付けなければ、どれもすべてのコアを使います。
+- 残すのは `verdict` が `sound` の行（すべての規約を通った図）です。長い詰みでは判定が時間の大半を占めます（ソルバは詰まないことを網羅的に確かめるため）。`--skip-reduce` は速くなりますが、その図は `sound` ではなく `mate` と出ます。
+
+### 生成器だけを使う
+
+`generator/generate_min.py` は判定をせずに生成し、図ごとに 1 つの JSON（`{"index", "sfen", "line"}`）を出します:
+
+```bash
+.venv/bin/python generator/generate_min.py --model branch-rl-large --ply 5 --count 8 --seed 1
+.venv/bin/python generator/generate_min.py --ply 7 --band sound --cond "T1=sac,H=1"
+```
+
+サンプルと同じ `--model`・`--repo-id`・`--revision`・`--weights-dir`・`--ply`・`--defenders`・`--count`・`--seed`・`--device` と復号のオプションに加えて、条件を 2 つ取ります:
+
+- `--band`（既定 `sound`）: 求める判定の区分。`sound`（主線に余詰が無い）、`yozume`（余詰がある）、`defect`（そのほかの規約の傷）、`none`（指定なし）。
+- `--cond 名前=値,...`: そのほかの条件。名前と値はファイルの `EXTRA_CONDITIONS` にあります。`T1`〜`T12` は主線の手筋（たとえば `T1` は `none`・`sac`・`free_sac`、ほとんどは `no` / `yes`）、`T13` は玉方の盤上の駒（`--defenders` が決めるもの）、`A` は攻方の盤上の駒、`H` は攻方の持駒、`M` は学習データの行が作られた経路です。書かなかった名前は指定なしです。
+
+出力は判定していません。SFEN をサンプルの `--sfen` か、ソルバの段に渡してください。
 
 ## 例: 15 手詰と、ソルバの解き方
 
@@ -102,7 +167,8 @@ USI では `G*3a 2a3a 3b3a+ 4a3a S*2b 3a4a S*3b 4a3b 4d3c+ 3b4a 2b3a+ 4a3a 1c2b+
 ### 判定のしかた
 
 ```bash
-python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b GS 1" --max-ply 15
+.venv/bin/python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b GS 1" --max-ply 15
+# Windows: .venv\Scripts\python examples/generate_and_judge.py --sfen ...
 ```
 
 ```

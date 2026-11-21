@@ -1,13 +1,12 @@
 //! Embeds the commit the solver is built from as `TSUME_SOLVER_BUILD`
 //! (`tsume_solver::record_clock::SOLVER_BUILD`): the catalog records'
-//! `producer.solverBuild` and the default `--record-solver-id`
-//! (`docs/experiments/emit-record-fields/README.md`).
+//! `producer.solverBuild` and the default `--record-solver-id`.
 //!
 //! The value is the first 7 hex digits of `HEAD`, with `+dirty` when a file of
-//! this crate (`tools/tsume-solver`, tracked or not, ignored files aside)
+//! this crate (`solver/`, tracked or not, ignored files aside)
 //! differs from the commit; `unknown` when git cannot be run here (a source
 //! tarball).  `TSUME_SOLVER_BUILD` set at build time overrides it (a bundle
-//! built from a tarball of a known commit, `tools/vast-cluster`).
+//! built from a tarball of a known commit).
 //!
 //! The script runs again when `HEAD` moves (its ref, `packed-refs`) or a file
 //! of the crate other than `target*` changes, so `+dirty` follows the work
@@ -59,7 +58,7 @@ fn detect(dir: &Path) -> String {
         }
     }
     // Only the repository that tracks this crate: a `git archive` tree
-    // unpacked inside another repository (a vast box's work directory) must
+    // unpacked inside another repository (a remote machine's work directory) must
     // not take that repository's commit.
     if git(dir, &["ls-files", "--error-unmatch", "Cargo.toml"]).is_none() {
         return "unknown".to_string();

@@ -2,7 +2,7 @@
 # channel (not an exact version) keeps CI, the dev machine, and
 # `dtolnay/rust-toolchain@stable` on the same compiler while still receiving
 # routine stable updates.  Bump to an exact version only if a regression forces
-# it; record the change in docs/development.md §1.
+# it.
 [toolchain]
 channel = "stable"
 components = ["rustfmt", "clippy"]

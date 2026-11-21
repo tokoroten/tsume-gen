@@ -34,41 +34,106 @@ Code for a deep-learning generator of tsume shogi (Japanese chess mate problems)
 
 ## Usage
 
+Run every command from the repository root unless it says otherwise.
+
+### Setup
+
+**Rust** (for the solver). Install it with [rustup](https://rustup.rs/). `solver/rust-toolchain.toml` asks for the `stable` channel (not a fixed version) with `rustfmt` and `clippy`, which is what a default rustup install has; `cargo` run inside `solver/` uses it.
+
+- Windows: Rust's default toolchain there (`x86_64-pc-windows-msvc`) links with Microsoft's C++ build tools. Install the Visual Studio Build Tools with the "Desktop development with C++" workload (the rustup installer offers to install them when they are missing).
+- Linux: a C linker (`cc`, e.g. from `build-essential` or `gcc`).
+- macOS: the Xcode command line tools (`xcode-select --install`).
+
+**Python** 3.12 and a virtual environment. The commands below call the venv's interpreter by its path, so no activation is needed: `.venv/bin/python` on Linux and macOS, `.venv\Scripts\python` on Windows.
+
+```bash
+python3 -m venv .venv                                   # Windows: py -3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt     # Windows: .venv\Scripts\python -m pip install -r requirements.txt
+```
+
+**PyTorch, CPU or GPU.** Everything here runs on the CPU (`--device cpu` is the default; the times below are CPU times), so the GPU build is optional. Which build `pip install -r requirements.txt` gives depends on the platform:
+
+- Windows: PyPI's `torch` is the CPU build (its version ends in `+cpu`). For an NVIDIA GPU, install the CUDA build from PyTorch's own index first, then `requirements.txt` (pip keeps the installed `torch`):
+  `.venv\Scripts\python -m pip install torch --index-url https://download.pytorch.org/whl/cu128`
+  Pick the `cu` number that your NVIDIA driver supports (`nvidia-smi` shows the highest CUDA version the driver supports; <https://pytorch.org/get-started/locally/> lists the builds). If the `+cpu` build is already installed, remove it first (`.venv\Scripts\python -m pip uninstall torch`); otherwise pip sees `torch` as installed and changes nothing.
+- Linux (x86_64): PyPI's `torch` already includes CUDA, and its download is several GB. Without a GPU, install the CPU build first: `.venv/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`.
+- macOS (Apple silicon): the default `torch` works; use `--device mps` for the GPU.
+
+Check which build you have (on Windows, `.venv\Scripts\python`):
+
+```bash
+.venv/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+`True` means `--device cuda` will work; `False` with a version ending in `+cpu` is the CPU build.
+
+**Weights.** The sample downloads the weights from Hugging Face on first use and keeps them in huggingface_hub's cache: `~/.cache/huggingface/hub` (Windows: `%USERPROFILE%\.cache\huggingface\hub`). Set `HF_HOME` to move the cache (it then lives in `$HF_HOME/hub`), or download the files yourself and pass `--weights-dir`.
+
+The first setup downloads from rustup, crates.io and PyPI (and download.pytorch.org for the CPU or CUDA build); after that, the only network access is the weight download from Hugging Face.
+
 ### Solver
 
 ```bash
 cd solver
-cargo build --release            # target/release/tsume-solver
+cargo build --release            # target/release/tsume-solver (Windows: tsume-solver.exe)
 ./target/release/tsume-solver --help
 ./target/release/tsume-solver solve-sfen "4k4/9/4P4/9/9/9/9/9/9 b G 1" --max-ply 3
 cd ..                            # back to the repository root
 ```
 
+On x86_64 the build targets x86-64-v3 (AVX2, BMI2; `solver/.cargo/config.toml`, read only when cargo runs inside `solver/`). On a CPU without them the solver stops with an illegal-instruction error; rebuild with `RUSTFLAGS="-C target-cpu=x86-64" cargo build --release` (PowerShell: `$env:RUSTFLAGS="-C target-cpu=x86-64"; cargo build --release`), which gives the same output, a little slower. See [solver/README.md](solver/README.md) for the stages and the rules they check.
+
+**Threads and memory.** The stages `validate`, `solve` and `reduce` take `--threads N`; the default is every logical core. Each thread judges one record at a time with its own search tables, which grow with the nodes the search visits (up to `--node-budget`), so the solver's peak memory grows with the number of threads. If the machine runs short of memory, lower `--threads` (the sample passes its own `--threads` on to the solver). The verdicts and the output order do not depend on the number of threads.
+
 ### Generation sample
 
-Building the solver needs Rust; `solver/rust-toolchain.toml` selects the stable toolchain (with `rustup`, `cargo` picks it up by itself). On x86_64 the build targets x86-64-v3 (AVX2, BMI2); see [solver/README.md](solver/README.md) for the stages and the rules they check.
-
-The sample needs Python 3.12 and the packages in [requirements.txt](requirements.txt) (PyTorch, NumPy, safetensors, huggingface_hub), and the solver built as above. Run these commands from the repository root.
-
 ```bash
-python3 -m venv .venv                                   # Windows: py -3.12 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt     # Windows: .venv\Scripts\python -m pip install -r requirements.txt
 .venv/bin/python examples/generate_and_judge.py --model branch-rl-large --ply 3 --count 8
+# Windows: .venv\Scripts\python examples/generate_and_judge.py --model branch-rl-large --ply 3 --count 8
 ```
-
-The first setup downloads from rustup, crates.io and PyPI; after that, the only network access is the weight download from Hugging Face.
 
 [`examples/generate_and_judge.py`](examples/generate_and_judge.py) downloads `<model>/model.safetensors` and `<model>/config.json` from [tokoroten-jp/tsume-gen](https://huggingface.co/tokoroten-jp/tsume-gen) (anonymously; `--weights-dir` uses local files instead), samples `--count` diagrams conditioned on the target mate length `--ply` with the decode of §4.2 and §4.4 of the paper (24 rounds, temperature 1.0, random unmasking order, illegal squares redrawn, top-p 0.95, the defender king on files 1–5), and judges every diagram with the solver: `validate`, `solve` (rules A–C, F, G) and `reduce` (rule D). It prints each diagram (SFEN) with its verdict (`sound`, `reducible`, `mate`, `rejected`, `invalid`, `unknown` or `undecodable`), its mate length and its main line on stdout, and two summary lines on stderr; `--json` prints one JSON object per diagram. `sound` means the diagram passed every rule; `mate` means it passed `solve` but rule D was not checked (`--skip-reduce`); `unknown` means the solver ran out of its node budget before deciding.
 
-- `--model`: `sft-small`, `sft-medium`, `sft-large`, `branch-rl-large` (the default, the weights of the paper) or `branch-rl-large-ema`.
+- `--model`: `sft-small`, `sft-medium`, `sft-large`, `branch-rl-large` (the default, the weights of the paper) or `branch-rl-large-ema`; also the comparison runs on the model card, `rl-indep-large-s0`, `rl-indep-large-s1`, `rl-branchonly-large-s0` and `rl-branchonly-large-s1`, each also with `-ema`. For weights in another Hugging Face repository use `--repo-id` (and `--revision`); for files on disk, `--weights-dir DIR` (a directory with `config.json` and `model.safetensors`; nothing is downloaded).
 - `--ply` (1, 3, 5, 7, 9 or 11), `--count`, `--seed`, `--device` (`cpu`, `cuda`, `cuda:N` or `mps`); `--defenders` (`0`–`5` or `6+`) conditions on the number of the defender's pieces on the board, king not counted (default: unspecified).
 - Decoding: `--rounds` (default 24), `--temperature` (default 1.0), `--top-p` (default 0.95; 1.0 turns it off) and `--no-redo-check` (turns off redrawing a round that broke a hard rule). `--plain` is short for `--top-p 1.0 --no-redo-check`. The defaults are the paper's decoding.
-- `--solver` (or the environment variable `TSUME_SOLVER_BIN`) names the solver binary; `--skip-reduce` skips rule D; `--threads` sets the solver's threads (default: all cores).
+- `--solver` (or the environment variable `TSUME_SOLVER_BIN`) names the solver binary; `--skip-reduce` skips rule D; `--threads` sets the solver's threads (default: all cores; see "Threads and memory").
 - `--max-ply` is the solver's search bound. The default 13 is for speed; the paper judged up to 15 plies, and `--max-ply 15` sets the same bound. That matches the judge's bound only: it does not by itself reproduce the paper's evaluation numbers, which also depend on the samples, conditions and decoding used there. With 13, a diagram whose only mate takes 15 plies is reported as not mating.
 - `--sfen SFEN` (repeatable) judges the given positions instead of generating; no model is loaded.
+- `--batch-size` (default 256): see the next section.
 - Generation is deterministic for a seed on one device type; different devices give different diagrams for the same seed.
 
-On a CPU, `branch-rl-large` with `--ply 3 --count 8` takes under 1 s to load (once downloaded), 7–8 s to generate and 14–19 s to judge, with a peak memory of 0.6–1.3 GB including the solver (times measured on one Windows PC, memory on Windows and macOS). The first run downloads 343 MB of weights (cached by huggingface_hub). On a GPU (`--device cuda`, with a CUDA build of PyTorch) we have not measured the memory; expect 1–2 GB. `--model sft-small` (about 30 MB) also works and is faster.
+On a CPU, `branch-rl-large` with `--ply 3 --count 8` takes under 1 s to load (once downloaded), 7–8 s to generate and 14–19 s to judge, with a peak memory of 0.6–1.3 GB including the solver (times measured on one Windows PC, memory on Windows and macOS). The first run downloads 343 MB of weights (cached, see "Weights" above). On a GPU (`--device cuda`, with a CUDA build of PyTorch) we have not measured the memory; expect 1–2 GB. `--model sft-small` (about 30 MB) also works and is faster.
+
+### Generating many puzzles
+
+Use `--json` and redirect stdout to a file; each line is one diagram with its verdict:
+
+```bash
+.venv/bin/python examples/generate_and_judge.py --ply 5 --count 10000 --seed 7 --json > out.jsonl
+# Windows: .venv\Scripts\python examples/generate_and_judge.py --ply 5 --count 10000 --seed 7 --json > out.jsonl
+```
+
+- The script works in batches of `--batch-size` diagrams (default 256): it generates a batch, judges it, writes its rows, flushes the output, and goes on with the next batch. The memory depends on the batch size, not on `--count`, and a run that stops early keeps every batch it finished. With more than one batch, stderr gets one progress line per batch.
+- The diagrams depend on the weights, the conditions, `--seed`, `--batch-size` and the device type. Batch 0 uses `--seed` itself, and each later batch a seed derived from `--seed` and its number, so the rows of a stopped run are the first complete batches of the full run. With `--count` at most `--batch-size`, the output is the same as before batches existed; another `--batch-size` gives other diagrams once `--count` is larger than it.
+- To run several jobs side by side, give each its own `--seed` and output file. Mind memory: each job runs its own solver, which uses every core unless `--threads` says otherwise.
+- Keep the rows whose `verdict` is `sound` (the ones that passed every rule). Judging dominates the run time for long mates, because the solver proves non-mates exhaustively; `--skip-reduce` is faster but reports such diagrams as `mate`, not `sound`.
+
+### The generator on its own
+
+`generator/generate_min.py` generates without judging and prints one JSON object per diagram (`{"index", "sfen", "line"}`):
+
+```bash
+.venv/bin/python generator/generate_min.py --model branch-rl-large --ply 5 --count 8 --seed 1
+.venv/bin/python generator/generate_min.py --ply 7 --band sound --cond "T1=sac,H=1"
+```
+
+It takes the sample's `--model`, `--repo-id`, `--revision`, `--weights-dir`, `--ply`, `--defenders`, `--count`, `--seed`, `--device` and decoding options, and two more conditions:
+
+- `--band` (default `sound`): the verdict class asked for: `sound` (no alternative mate on the main line), `yozume` (with such alternatives), `defect` (other rule defects) or `none` (unspecified).
+- `--cond NAME=VALUE,...`: further conditions, listed in `EXTRA_CONDITIONS` in the file: `T1`–`T12` are techniques on the main line (for example `T1` = `none`, `sac` or `free_sac`; most others `no` / `yes`), `T13` the defender's board pieces (what `--defenders` sets), `A` the attacker's board pieces, `H` the attacker's pieces in hand, and `M` the route by which the training row was made. A name left out is unspecified.
+
+The output is not judged; pass the SFENs to the sample with `--sfen`, or to the solver stages.
 
 ## Example: a 15-move problem and how the solver solves it
 
@@ -102,7 +167,8 @@ In USI: `G*3a 2a3a 3b3a+ 4a3a S*2b 3a4a S*3b 4a3b 4d3c+ 3b4a 2b3a+ 4a3a 1c2b+ 3a
 ### Judging it
 
 ```bash
-python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b GS 1" --max-ply 15
+.venv/bin/python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b GS 1" --max-ply 15
+# Windows: .venv\Scripts\python examples/generate_and_judge.py --sfen ...
 ```
 
 ```

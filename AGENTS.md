@@ -22,6 +22,8 @@ Section 1 explains the parts, sections 2–5 get everything running with a check
   - `sft-large`
   - `sft-medium`
   - `sft-small`: the smallest and fastest.
+  - The comparison runs on the model card: `rl-indep-large-s0`, `rl-indep-large-s1`, `rl-branchonly-large-s0`, `rl-branchonly-large-s1`, each also with `-ema`.
+  - Weights elsewhere: `--repo-id` (another Hugging Face repository) or `--weights-dir DIR` (local `config.json` and `model.safetensors`).
 
 No account, token, GPU or database is needed. The first setup downloads from rustup, crates.io and PyPI (and download.pytorch.org if you pick the CPU build of PyTorch). After that, the only network access is the weight download from Hugging Face. Once the weights are cached, or with `--weights-dir`, it runs offline.
 
@@ -29,7 +31,7 @@ No account, token, GPU or database is needed. The first setup downloads from rus
 
 | Need | Detail | Check |
 | --- | --- | --- |
-| Rust | Install with rustup. `solver/rust-toolchain.toml` selects the stable toolchain. | `cargo --version` |
+| Rust | Install with rustup. `solver/rust-toolchain.toml` selects the `stable` channel with `rustfmt` and `clippy` (a default rustup install has them). Windows: the MSVC toolchain needs the Visual Studio Build Tools with "Desktop development with C++". Linux: a C linker (`cc`). macOS: `xcode-select --install`. | `cargo --version` |
 | Python | 3.12 (the tested version) | `python3 --version` (Windows: `python --version`) |
 | Disk | About 1.5 GB: the Rust build ~0.5 GB, PyTorch, and the weights (343 MB for a large model, about 30 MB for `sft-small`) | — |
 | Memory | About 1.5 GB free for the default run on CPU. The measured peak, including the solver, was 0.6–1.3 GB. | — |
@@ -80,15 +82,18 @@ python3 -m venv .venv                                       # Windows: py -3.12 
 ```
 
 - Call the venv's interpreter by its path (`.venv/bin/python`, or `.venv\Scripts\python` on Windows). This avoids depending on shell activation or aliases. The rest of this file writes `python` for that interpreter.
-- No GPU: install the CPU build of PyTorch first, to skip the multi-gigabyte CUDA download: `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`.
-- NVIDIA GPU: install the CUDA build of PyTorch that matches the driver.
+- Everything runs on the CPU (the default `--device cpu`); a GPU is optional.
+- Windows: PyPI's `torch` is the CPU build (`+cpu`). For an NVIDIA GPU, install the CUDA build first, then `requirements.txt`: `python -m pip install torch --index-url https://download.pytorch.org/whl/cu128` (pick the `cu` number the driver supports; `nvidia-smi` shows it). If the `+cpu` build is already there, `python -m pip uninstall torch` first, or pip changes nothing.
+- Linux without a GPU: PyPI's `torch` includes CUDA (several GB). Install the CPU build first: `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`.
 - Apple silicon: the default PyTorch works with `--device mps`.
 
 **Check 3:**
 
 ```bash
-python -c "import torch, numpy, safetensors, huggingface_hub; print(torch.__version__)"
+python -c "import torch, numpy, safetensors, huggingface_hub; print(torch.__version__, torch.cuda.is_available())"
 ```
+
+Expected: the version, then `True` if `--device cuda` will work (`False` with `+cpu` is the CPU build).
 
 ## 5. Run the sample
 
@@ -99,7 +104,7 @@ python examples/generate_and_judge.py --ply 3 --count 8 --seed 1
 - `--ply` is the target mate length: 1, 3, 5, 7, 9 or 11.
 - `--device` picks the hardware: `cpu` (the default), `cuda`, `cuda:N` or `mps`.
 - `--model` picks the weights; for a quick first try, use `--model sft-small`.
-- The first run downloads the weights. huggingface_hub caches them; set `HF_HOME` to move the cache.
+- The first run downloads the weights. huggingface_hub caches them in `~/.cache/huggingface/hub` (Windows: `%USERPROFILE%\.cache\huggingface\hub`); set `HF_HOME` to move the cache.
 - A warning about "unauthenticated requests" is harmless. Do not ask the user for a Hugging Face token.
 
 **Check 4.** The script prints two summary lines on **stderr**, for example:
@@ -143,8 +148,11 @@ Notes:
 python examples/generate_and_judge.py --ply 5 --count 200 --seed 7 --json > out.jsonl
 ```
 
+- The script works in batches of `--batch-size` (default 256): generate, judge, write and flush each batch, then the next. Memory follows the batch size, not `--count`, and a stopped run keeps its finished batches.
+- The output is deterministic for (weights, conditions, `--seed`, `--batch-size`, device type). Batch 0 uses `--seed`, later batches a seed derived from it, so a stopped run's rows are the first batches of the full run. Up to `--batch-size` diagrams, the output is the same as without batches.
+- For parallel jobs, give each its own `--seed` and output file.
 - Judging dominates the run time for long mates, because the solver proves non-mates exhaustively.
-- Use `--threads N` for the solver (the default is all cores) and a GPU for generation.
+- Use `--threads N` for the solver (the default is all logical cores) and a GPU for generation. Each solver thread has its own search tables, so memory grows with the threads: lower `--threads` if memory runs short (the verdicts do not depend on it).
 - `--skip-reduce` skips the removable-piece check: faster, but such positions are reported as `mate`, not `sound`.
 
 **Judge the user's own position.** Use `--sfen`; no model is loaded:
@@ -163,7 +171,7 @@ python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b G
 - `fetch_weights` downloads `<model>/config.json` and `<model>/model.safetensors`; `load_model(dir, device)` returns the model and the `config.json` metadata.
 - `make_condition(model, ply, band="sound", defenders=None, extra=None)` builds the condition (`band` is `sound`, `yozume`, `defect` or `none`; `defenders` is `0`-`5` or `6+`; `extra` maps further names in `EXTRA_CONDITIONS` to values).
 - `generate(model, condition, count, seed, device, rounds=24, temperature=1.0, top_p=0.95, redo_check=True)` returns `{"sfen", "line"}` per diagram. The defaults are the paper's decoding: random unmasking order, the defender king on files 1–5.
-- `python generator/generate_min.py --help` runs it on its own (generation only, no judging).
+- `python generator/generate_min.py --help` runs it on its own (generation only, no judging). Besides the sample's options it takes `--band` (`sound`, `yozume`, `defect` or `none`) and `--cond NAME=VALUE,...` (names and values in `EXTRA_CONDITIONS`).
 - Add `generator/` to `sys.path`, as the sample does.
 
 **Use local weights.** If the machine has no network access, download `<model>/config.json` and `<model>/model.safetensors` from Hugging Face by other means, then pass `--weights-dir DIR`.
@@ -178,6 +186,8 @@ python examples/generate_and_judge.py --sfen "5k1+s1/4g1P2/8S/5S3/B8/9/9/9/9 b G
 | PyTorch download of several GB | That is the CUDA build. On a machine without a GPU, install the CPU build (section 4). |
 | Hugging Face HTTP errors | Retry, check the proxy, or use `--weights-dir` (section 6). |
 | Many `unknown` verdicts | Raise `--node-budget` (the default is 10,000,000 nodes). |
+| Out of memory while judging | Lower `--threads` (each solver thread has its own tables) or `--batch-size`. |
+| `torch.cuda.is_available()` is `False` on a GPU machine | A CPU build of PyTorch is installed. Install the CUDA build (section 4). |
 
 ## 8. License and attribution
 

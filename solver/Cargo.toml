@@ -39,9 +39,9 @@ codegen-units = 1
 [profile.bench]
 inherits = "release"
 
-# Quick builds for screening speed changes (docs/experiments/solver-scaling/
-# README.md §15): `cargo build --profile dev-bench`, binary in
-# target/dev-bench.  Compare dev-bench builds only with each other; confirm
+# Quick builds for screening speed changes: `cargo build --profile dev-bench`,
+# binary in target/dev-bench.  Compare dev-bench builds only with each other;
+# confirm
 # with the release profile.
 [profile.dev-bench]
 inherits = "release"

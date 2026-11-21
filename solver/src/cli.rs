@@ -49,22 +49,23 @@ pub(crate) enum Command {
         #[arg(long, value_parser = ["b", "w"])]
         attacker: Option<String>,
         /// Disable the strict-tsume defender remainder.
-        /// Experimental (2026-10-22, `docs/experiments/solver-cli-audit/README.md` §7.4,
-        /// §8): hidden from `--help`; using it prints a note on stderr and tags catalog
-        /// records `+x`.
+        /// Experimental (2026-10-22): hidden from `--help`; using it prints a note on
+        /// stderr and tags catalog records `+x`.
+        // docs/experiments/solver-cli-audit/README.md §7.4, §8.
         #[arg(long = "no-strict-material", hide = true)]
         no_strict_material: bool,
         /// `pruned` (default since 2026-10-22; the full graph of a deep solve
         /// runs to gigabytes), `full`, or `none`.
         #[arg(long, default_value = "pruned", value_parser = ["full", "pruned", "none"])]
         graph: String,
-        /// 無駄合 policy (`docs/rules.md` rule F): `classical` (default since
-        /// 2026-10-22: prune plus the classical 無駄合 reading, a check answered
-        /// only by futile interposition drops is mate; what the composition
-        /// rules use since `PIPELINE_VERSION` 0.10.0), `prune`, or `keep` (the
-        /// bare solver contract, `packages/solver`'s default, which
-        /// `diff-solve.ts` names explicitly).  A stdin request may override it
-        /// per line with `"uselessInterposition"`.
+        /// 無駄合 policy (rule F): `classical` (default since 2026-10-22: prune
+        /// plus the classical 無駄合 reading, a check answered only by futile
+        /// interposition drops is mate; what the composition rules use since
+        /// `PIPELINE_VERSION` 0.10.0), `prune`, or `keep` (the bare solver
+        /// contract).  A stdin request may override it per line with
+        /// `"uselessInterposition"`.
+        // Rule F: docs/rules.md.  `keep` is packages/solver's default, which
+        // diff-solve.ts names explicitly.
         #[arg(long, default_value = "classical", value_parser = ["keep", "prune", "classical"])]
         useless_interposition: String,
         /// Read `{"sfen":…,"maxPly":…,"nodeBudget":…,"strictMaterial":…,
@@ -86,12 +87,13 @@ pub(crate) enum Command {
         #[arg(long, default_value_t = 8)]
         attempts: u32,
         /// Mate-search ply bound.  Required since 2026-10-22: a forgotten bound
-        /// silently judged at 11 (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// silently judged at 11.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         max_ply: u32,
         /// Node budget.  Required since 2026-10-22: a forgotten budget silently
-        /// ran one or two orders of magnitude below the catalogue's
-        /// (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// ran one or two orders of magnitude below the production runs'.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         node_budget: u64,
         /// Overrides the seed derived from `sourceId`.
@@ -100,24 +102,25 @@ pub(crate) enum Command {
         /// Rule D v5: up to K length-preserving reductions (other displayed
         /// main lines) as extra records after each input's main-line-preserving
         /// one.  `0` (the default) keeps one output record per input; the
-        /// frozen number the catalogue runs pass is 2 (`docs/rules.md`).
+        /// frozen number of the production runs is 2.
+        // docs/rules.md.
         #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u64).range(0..=tsume_solver::reduce::LENGTH_K as u64))]
         length_k: u64,
-        /// Turns rule D v5's rule B entry off (owner decision 2026-10-09 17:50
-        /// JST): by default an input refused for rule B alone is let in, its
-        /// record becomes its best length-preserving reduction (and up to
-        /// K_y - 1 more follow), each step judged by the full acceptance test;
+        /// Turns rule D v5's rule B entry off (2026-10-09): by default an input
+        /// refused for rule B alone is let in, its record becomes its best
+        /// length-preserving reduction (and up to K_y - 1 more follow), each
+        /// step judged by the full acceptance test;
         /// one with no step is rejected `yozume_not_reducible`.
-        /// Experimental (2026-10-22, `docs/experiments/solver-cli-audit/README.md` §7.4,
-        /// §8): hidden from `--help`; using it prints a note on stderr and tags catalog
-        /// records `+x`.
+        // owner decision 2026-10-09 17:50 JST.
+        /// Experimental (2026-10-22): hidden from `--help`; using it prints a note on
+        /// stderr and tags catalog records `+x`.
+        // docs/experiments/solver-cli-audit/README.md §7.4, §8.
         #[arg(long = "no-rule-b-entry", hide = true)]
         no_rule_b_entry: bool,
-        /// The C/G entry, the rule C / G repair (owner decision 2026-10-10; a
-        /// formal option since 2026-11-10, owner-approved: the production
-        /// judge repairs koma-amari and uninvolved pieces with it,
-        /// `docs/experiments/cg-repair/README.md`).  Off by default and not part
-        /// of the frozen rule D, so the public pipeline never passes it: an
+        /// The C/G entry, the rule C / G repair (2026-10-10; a formal option
+        /// since 2026-11-10: the production judge repairs koma-amari and
+        /// uninvolved pieces with it).  Off by default and not part of the
+        /// frozen rule D, so the public pipeline never passes it: an
         /// input refused for rules C and/or G alone (`koma_amari`, `inert_*`;
         /// together with rule B's reasons when the rule B entry is on) is
         /// repaired -- spare attacker hand units handed back, inert pieces
@@ -126,9 +129,12 @@ pub(crate) enum Command {
         /// its fixpoint: length-preserving outputs only (`reduction.entry`
         /// `rule-cg-relaxed`, `reduction.minimality` as for every reduction),
         /// or `cg_not_repairable`.  Every output is gated again by `solve`.
+        // owner decision 2026-10-10, owner-approved as a formal option 2026-11-10
+        // (docs/experiments/cg-repair/README.md).
         #[arg(long = "cg-entry")]
         cg_entry: bool,
-        /// Concurrent acceptance tests per record (2026-09-25, owner-approved):
+        // owner-approved 2026-09-25.
+        /// Concurrent acceptance tests per record (2026-09-25):
         /// the attempts and speculative greedy steps of one record run on this
         /// many threads, each search on its own diagram with a solver of its
         /// own.  Candidates are committed in the sequential order, so the
@@ -153,12 +159,13 @@ pub(crate) enum Command {
     /// Exact solve, uniqueness/coverage gates, features and runtime graph.
     Solve {
         /// Mate-search ply bound.  Required since 2026-10-22: a forgotten bound
-        /// silently judged at 11 (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// silently judged at 11.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         max_ply: u32,
         /// Node budget.  Required since 2026-10-22: a forgotten budget silently
-        /// ran one or two orders of magnitude below the catalogue's
-        /// (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// ran one or two orders of magnitude below the production runs'.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         node_budget: u64,
         /// Accepted and ignored since 2026-10-22: the gate's designated main
@@ -166,11 +173,13 @@ pub(crate) enum Command {
         /// walk of the full graph) is always written as `extra.designatedMainLine`
         /// (USI, empty when rules B and C were never evaluated) and
         /// `extra.designatedMainLineLeftoverHand` on every record the gate
-        /// solved, accepted or rejected (owner 2026-10-11: the catalogue keeps a
-        /// main line for every row, yozume included, `docs/catalog/INGEST.md`).
+        /// solved, accepted or rejected (2026-10-11: every record keeps a main
+        /// line, yozume included).
         /// Kept (and listed in `--help`) so callers that also drive older
         /// binaries, where it is still needed, keep one command line.  Ignored
         /// by the measurement modes too.
+        // owner 2026-10-11: the catalogue keeps a main line for every row
+        // (docs/catalog/INGEST.md).
         #[arg(long)]
         emit_main_line: bool,
         #[command(flatten)]
@@ -182,13 +191,12 @@ pub(crate) enum Command {
     },
     /// Measurement only: probe each input line (a record or a bare SFEN) for a
     /// forced mate within `--max-ply` and its length; one small JSON object per
-    /// line, nothing published (`docs/generation.md` §5.5).
+    /// line, nothing published.
     ///
     /// `dfpn` (the df-pn prober), `exact-probe` (`exact::minimum_mate_validate`,
     /// rules off) and `cdfpn` (the classical df-pn prober under rule F
     /// classical, the RL entry since 2026-10-10: `cdfpn::entry_probe`; its `pv`
-    /// is always empty).  Split out of `solve --engine` on 2026-10-22
-    /// (`docs/experiments/solver-cli-audit/README.md` §7.6, §8).
+    /// is always empty).  Split out of `solve --engine` on 2026-10-22.
     ///
     /// `cdfpn` rows also carry `disproofKind` (null unless `DISPROVEN`):
     /// `checksExhausted` -- no mate at any bound (every checking line runs out
@@ -196,6 +204,8 @@ pub(crate) enum Command {
     /// -- some checking line reached `--max-ply` (or no bound-free refutation
     /// was found; a deeper mate may exist).  Measurement only: the other
     /// fields are unchanged.
+    // docs/generation.md §5.5; the split: docs/experiments/solver-cli-audit/README.md
+    // §7.6, §8.
     Probe {
         /// `dfpn`, `exact-probe` or `cdfpn`.
         #[arg(long, value_parser = ["dfpn", "exact-probe", "cdfpn"])]
@@ -230,8 +240,8 @@ pub(crate) enum Command {
     /// names the generator.
     ReduceAccepted {
         /// Node budget.  Required since 2026-10-22: a forgotten budget silently
-        /// ran one or two orders of magnitude below the catalogue's
-        /// (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// ran one or two orders of magnitude below the production runs'.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         node_budget: u64,
         /// Randomised greedy orders; the fewest-piece result wins.
@@ -242,7 +252,8 @@ pub(crate) enum Command {
         /// `0` (the default) keeps one output record per input.
         #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u64).range(0..=tsume_solver::reduce::LENGTH_K as u64))]
         length_k: u64,
-        /// Concurrent acceptance tests per record (2026-09-25, owner-approved):
+        // owner-approved 2026-09-25.
+        /// Concurrent acceptance tests per record (2026-09-25):
         /// the attempts and speculative greedy steps of one record run on this
         /// many threads, each search on its own diagram with a solver of its
         /// own.  Candidates are committed in the sequential order, so the
@@ -262,19 +273,23 @@ pub(crate) enum Command {
         #[command(flatten)]
         position: PositionParallel,
     },
-    /// Generate tsume puzzles from mating positions (spec 9.1.7, spec 10).
+    // Spec 9.1.7, spec 10.
+    /// Generate tsume puzzles from mating positions.
     ///
     /// Reads SFEN lines or JSONL PipelineRecords (any stage), one position per
     /// record, and writes solved-stage records for the best strict-valid variants.
     Distill {
         /// Base seed.  Required since 2026-10-22 (the time-based default broke
-        /// reproducibility, spec §35).
+        /// reproducibility).
+        // Spec §35.
         #[arg(long)]
         seed: u64,
-        /// Randomised greedy operator orders per source (spec 10.4).
+        /// Randomised greedy operator orders per source.
+        // Spec 10.4.
         #[arg(long, default_value_t = 16)]
         attempts: u32,
-        /// Opt in to `distill-v2` (`docs/generation.md` §2.6): rule B relaxed
+        // docs/generation.md §2.6.
+        /// Opt in to `distill-v2`: rule B relaxed
         /// on chain steps and one `relocate` (operator f, the rule-C repair).
         /// **Off by default** -- without it `distill` reproduces `distill-v1`
         /// byte for byte and stamps `distill-v1` in the provenance.
@@ -283,7 +298,8 @@ pub(crate) enum Command {
         /// Accept variants whose minimum mate length differs from the source's
         /// (shorter or longer; the bound is `--max-ply`).  Each emitted record
         /// carries the variant's own `matePly`, and the provenance records
-        /// `allowLengthChange: true`.  **Off by default** (owner 2026-10-29,
+        // owner 2026-10-29.
+        /// `allowLengthChange: true`.  **Off by default** (2026-10-29,
         /// for sources whose fixed-length distill found nothing); without it
         /// the output is byte for byte the same as before the flag came back.
         #[arg(long)]
@@ -298,7 +314,8 @@ pub(crate) enum Command {
         #[arg(long, value_parser = tsume_solver::jsonl::ORIGIN_CLASSES)]
         origin_class: Option<String>,
         /// Mate-search ply bound.  Required since 2026-10-22: a forgotten bound
-        /// silently judged at 11 (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// silently judged at 11.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         max_ply: u32,
         #[arg(long, default_value_t = 250_000)]
@@ -311,9 +328,10 @@ pub(crate) enum Command {
         #[arg(long, default_value_t = false)]
         prestrip: bool,
         /// Engine behind the per-step existence/minimal-length checks: `exact`
-        /// (default, byte-identical to every earlier run) or `dfpn`
-        /// (`docs/generation.md` §5.5).  The emitted record's verdict, graph and
-        /// stats always come from the exact solver.
+        /// (default, byte-identical to every earlier run) or `dfpn`.  The
+        /// emitted record's verdict, graph and stats always come from the exact
+        /// solver.
+        // docs/generation.md §5.5.
         #[arg(long, default_value = "exact", value_parser = ["exact", "dfpn"])]
         probe: String,
         /// Node budget of one df-pn probe.  Ignored with `--probe exact`.
@@ -353,14 +371,15 @@ pub(crate) enum Command {
         #[command(flatten)]
         parallel: Parallel,
     },
+    // Catalog schema v2.5 `n_main_paths` / `has_final_alt`.
     /// `|Π|` and the final-move alternative of stored solution graphs, without
-    /// solving (catalog schema v2.5 `n_main_paths` / `has_final_alt`).
+    /// solving.
     ///
     /// Reads JSONL with `canonicalHash` and `solution` (the solution object, or
     /// a string holding its JSON, as the catalog stores it) and writes one
     /// `{"canonicalHash","nMainPaths","hasFinalAlt","error"}` line per input, in
     /// input order.  `nMainPaths` is the number of root-to-end paths of the
-    /// main-line region exactly as the reducer counts them (`docs/rules.md`
+    /// main-line region exactly as the reducer counts them (rule D,
     /// "Reduction v5"), `null` over `--cap`; `hasFinalAlt` is 1 when an attack
     /// node of the region at distance 1 has two or more correct moves.  A line
     /// that cannot be read gets `error` (and `nMainPaths: null, hasFinalAlt: 0`).
@@ -393,14 +412,16 @@ pub(crate) enum Command {
     /// solved-stage records for every `k + 2` predecessor, accepted or rejected.
     Extend {
         /// Node budget of one candidate's publishing gate.  Required since
-        /// 2026-10-22 (`docs/experiments/solver-cli-audit/README.md` §7.3).
+        /// 2026-10-22.
+        // docs/experiments/solver-cli-audit/README.md §7.3.
         #[arg(long)]
         node_budget: u64,
         /// Ply bound used to measure k when the input record does not carry it.
         #[arg(long, default_value_t = 11)]
         source_max_ply: u32,
         /// `accepted` (default), `all`, or `candidates` (enumerate only, no
-        /// search: the input of `tools/reverse-ranker/score.py`).
+        /// search: the input of a candidate ranker).
+        // The ranker: tools/reverse-ranker/score.py.
         #[arg(long, default_value = "accepted", value_parser = ["accepted", "all", "candidates"])]
         emit: String,
         /// JSONL verification order: one `{"parentSourceId", "candidateIndex",
@@ -449,14 +470,16 @@ pub(crate) enum Command {
     },
     /// Mine mating positions: random position -> AI play -> mate detection.
     Mine {
-        /// Candidate-generation family (spec 9.1.1).
+        /// Candidate-generation family.
+        // Spec 9.1.1.
         #[arg(long, default_value = "random_selfplay", value_parser = ["random_direct", "random_selfplay", "standard_selfplay"])]
         family: String,
         /// Candidate records to emit.
         #[arg(long, default_value_t = 100)]
         count: usize,
         /// Base seed.  Required since 2026-10-22 (the time-based default broke
-        /// reproducibility, spec §35).
+        /// reproducibility).
+        // Spec §35.
         #[arg(long)]
         seed: u64,
         /// Self-play plies before/while mining, as MIN..MAX or a single number.
@@ -476,14 +499,16 @@ pub(crate) enum Command {
         #[arg(long)]
         prestrip: bool,
         /// Engine behind mate detection: `exact` (default, byte-identical to every
-        /// earlier run) or `dfpn` (`docs/generation.md` §5.5).  `strictValid` always
-        /// comes from the exact solver.
+        /// earlier run) or `dfpn`.  `strictValid` always comes from the exact
+        /// solver.
+        // docs/generation.md §5.5.
         #[arg(long, default_value = "exact", value_parser = ["exact", "dfpn"])]
         probe: String,
         /// Node budget of one df-pn probe.  Ignored with `--probe exact`.
         #[arg(long, default_value_t = 1_000_000)]
         dfpn_node_budget: u64,
-        /// `RandomPositionGeneratorConfig` JSON (spec 9.1.2).
+        /// `RandomPositionGeneratorConfig` JSON.
+        // Spec 9.1.2.
         #[arg(long)]
         config: Option<String>,
         /// Restrict the proposal distribution.
@@ -500,8 +525,8 @@ pub(crate) enum Command {
     },
 }
 
-/// `--emit-negatives` (owner order 2026-10-10 22:30 JST,
-/// `docs/experiments/reduce-negatives/README.md`, [`tsume_solver::negatives`]):
+// owner order 2026-10-10 22:30 JST, docs/experiments/reduce-negatives/README.md.
+/// `--emit-negatives` ([`tsume_solver::negatives`]):
 /// the diagrams the reducer judged and refused, written to a side file.  Off by
 /// default; the main output is byte-identical with it on or off.
 impl Command {
@@ -551,8 +576,8 @@ impl NegativesArgs {
     }
 }
 
-/// `--emit-budget-outs` (owner 2026-10-17,
-/// [`tsume_solver::reduce::budget_outs_begin`]):
+// owner 2026-10-17.
+/// `--emit-budget-outs` ([`tsume_solver::reduce::budget_outs_begin`]):
 /// every reducer check whose final answer ran out of its budget, per input,
 /// written to a side file.  Off by default; the main output, the records and
 /// `--emit-negatives` are byte-identical with it on or off.
@@ -570,11 +595,11 @@ pub(crate) struct BudgetOutsArgs {
     pub(crate) emit_budget_outs: Option<String>,
 }
 
-/// `--emit-record` (owner 2026-10-12,
-/// `docs/catalog/INGEST.md` §6): the catalog record (`catalog-record/2`,
-/// `tools/catalog/record.py`) of every diagram the publishing gate judged,
-/// written to a side file in input order, ready for `tools/catalog/ingest.py`
-/// without an adapter.  Off by default; the main output is byte-identical with
+// owner 2026-10-12; docs/catalog/INGEST.md
+// §6, tools/catalog/record.py, tools/catalog/ingest.py.
+/// `--emit-record`: the catalog record (`catalog-record/2`) of every diagram
+/// the publishing gate judged, written to a side file in input order, ready
+/// for a catalog ingest without an adapter.  Off by default; the main output is byte-identical with
 /// it on or off ([`tsume_solver::catalog_record`]).
 #[derive(Args, Clone, Debug)]
 pub(crate) struct RecordArgs {
@@ -588,7 +613,8 @@ pub(crate) struct RecordArgs {
     /// for the escalation queue).  Without it they stay in the records' file,
     /// as before.  Since 1.4.0 a gate whose prober or construction ran out of
     /// budget lands here too: the one-thread full-width search no longer
-    /// solves it again on the same budget (owner 2026-11-05).
+    /// solves it again on the same budget (2026-11-05).
+    // owner 2026-11-05.
     #[arg(long)]
     pub(crate) emit_unresolved: Option<String>,
     /// The binary's id, `S-<7-hex commit>[tag]` (e.g. `S-dd32a41`): the record's
@@ -599,7 +625,8 @@ pub(crate) struct RecordArgs {
     /// `unknown`).  The tags `+x` and `+pdfpn` are appended either way.
     #[arg(long)]
     pub(crate) record_solver_id: Option<String>,
-    /// `producer.producedBy` (`docs/catalog/CATALOG_ORIGINS.md` §3.4).  An input
+    // docs/catalog/CATALOG_ORIGINS.md §3.4.
+    /// `producer.producedBy`, the name of the producer.  An input
     /// record's `extra.catalogProducer` object overrides it (and the route, the
     /// generation, `interesting`, `rankerId`) per record.  Required with
     /// `--emit-record`.
@@ -729,7 +756,8 @@ impl RecordArgs {
 #[derive(Args, Clone, Copy)]
 pub(crate) struct PositionParallel {
     /// The exact search's transposition table: `exact` (default) or
-    /// `compact` (opt-in, owner instruction 2026-10-15): 22 bytes per node
+    // owner instruction 2026-10-15.
+    /// `compact` (opt-in, 2026-10-15): 22 bytes per node
     /// (128-bit key, id, verdict) and no search graph, the solution region
     /// rebuilt by a second pass; the output is identical.
     #[arg(long, default_value = "exact", value_parser = parse_table_mode)]
@@ -738,7 +766,8 @@ pub(crate) struct PositionParallel {
     /// (solver v3's prefilter, construction and `stats.nodesProof`; opt-in,
     /// 2026-10-16): the prober asked and `P - 1` helper threads of its own
     /// run a parallel df-pn with virtual proof numbers over one lock-free
-    /// shared transposition table (`docs/experiments/par-dfpn/README.md`).
+    // docs/experiments/par-dfpn/README.md.
+    /// shared transposition table.
     /// `1` (default) is the one-thread prober, byte-identical to before.
     /// With `P > 1` every resolved verdict (status, reasons, mate length,
     /// solution, main line) is the one-thread prober's; what may differ is
@@ -878,7 +907,8 @@ pub(crate) fn parse_ply_range(text: &str) -> Result<(u32, u32)> {
     Ok((low, high))
 }
 
-/// The CLI surface snapshot (`docs/experiments/solver-cli-audit/README.md` §5):
+// docs/experiments/solver-cli-audit/README.md §5.
+/// The CLI surface snapshot:
 /// every subcommand's every option -- name, value or flag, default, possible
 /// values, hidden -- as one deterministic line each, compared with
 /// `tests/fixtures/cli-surface.txt`.  Adding, removing or re-defaulting an
@@ -968,7 +998,7 @@ mod cli_surface {
             .replace("\r\n", "\n");
         assert!(
             actual == expected,
-            "the CLI surface changed; update docs/experiments/solver-cli-audit/README.md and \
+            "the CLI surface changed; update the CLI notes and \
              rewrite the fixture with TSUME_UPDATE_CLI_SURFACE=1:\n{actual}"
         );
     }

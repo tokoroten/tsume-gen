@@ -1,12 +1,12 @@
-# x86-64-v3 (AVX2, BMI1/2, LZCNT, MOVBE) for every x86_64 build of the solver
-# (owner 2026-10-27, docs/experiments/solver-scaling/README.md §14): the
-# bitboards' u128 leading/trailing-zero counts compile to lzcnt/tzcnt, 1.03-1.05x
-# on one thread, with the output byte for byte the same.  Every machine the
-# solver runs on has it: the PC (Ryzen 9 5950X), vast boxes (Zen 3 or later,
-# Ice Lake-SP or later only) and the GitHub runners.  aarch64 (the Mac) is
-# untouched.
+# x86-64-v3 (AVX2, BMI1/2, LZCNT, MOVBE) for every x86_64 build of the solver:
+# the bitboards' u128 leading/trailing-zero counts compile to lzcnt/tzcnt,
+# 1.03-1.05x on one thread, with the output byte for byte the same.  A binary
+# built this way fails (an illegal instruction) on an x86_64 CPU without them
+# (older than Intel Haswell or AMD Excavator, and some low-end models); there,
+# set RUSTFLAGS (e.g. RUSTFLAGS="-C target-cpu=x86-64") for the build, which
+# replaces these flags.  aarch64 is untouched.
 #
-# Cargo reads this file only when it runs with tools/tsume-solver (or below) as
+# Cargo reads this file only when it runs with solver/ (or below) as
 # its working directory, and ignores it whenever RUSTFLAGS is set; a build from
 # elsewhere (`--manifest-path`) is the plain x86-64 baseline, slower and
 # otherwise the same.

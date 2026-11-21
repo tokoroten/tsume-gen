@@ -24,8 +24,17 @@ Steps:
    be removed).  ``solver/README.md`` lists the rules.
 
 The verdict ``sound`` means the diagram passed all of them; with ``--skip-reduce`` a
-diagram that passed ``solve`` is ``mate`` (rule D not checked).  Generation is
-deterministic for a seed on one device type (CPU here).
+diagram that passed ``solve`` is ``mate`` (rule D not checked).
+
+Batches: ``--count`` diagrams are made ``--batch-size`` at a time (default
+256): generate a batch, judge it, print its rows and flush, then the next.  A
+run that stops early keeps the rows already printed, and the memory follows
+the batch size, not ``--count``.  Batch 0 uses ``--seed`` itself and batch
+``k`` the seed :func:`batch_seed` derives from (``--seed``, ``k``), so a run
+with ``--count`` up to ``--batch-size`` gives the same diagrams as one batch
+of that size.  The output is deterministic for (weights, conditions,
+``--seed``, ``--batch-size``, device type); another batch size gives other
+diagrams once ``--count`` exceeds it.
 
 The provenance written into the solver's input records below is a
 placeholder for judging only; when you share generated diagrams, state
@@ -53,6 +62,20 @@ import generate_min as gm  # noqa: E402
 #: plies) and node budget.
 GATE_MAX_PLY = 13
 GATE_BUDGET = 10_000_000
+#: Diagrams per batch (generate, judge, print).  Large enough that the
+#: solver's threads stay busy and a GPU gets a useful batch; small enough
+#: that a stop loses at most one batch.  It does not change the output of a
+#: run with ``--count`` up to it (one batch, as before batches existed).
+DEFAULT_BATCH_SIZE = 256
+
+
+def batch_seed(seed: int, batch: int) -> int:
+    """The generation seed of batch ``batch``: ``seed`` for batch 0, else a
+    63-bit hash of both (so batch 1 of seed 1 is not batch 0 of seed 2)."""
+    if batch == 0:
+        return seed
+    digest = hashlib.sha256(("tsume-gen-batch:%d:%d" % (seed, batch)).encode("ascii")).digest()
+    return int.from_bytes(digest[:8], "big") >> 1
 
 
 def default_solver() -> Path:
@@ -72,6 +95,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--defenders", default=None, choices=dict(gm.EXTRA_CONDITIONS)["T13"],
                    help="defender pieces on the board, king not counted (default unspecified)")
     p.add_argument("--count", type=int, default=8)
+    p.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
+                   help="diagrams generated, judged and printed at a time (default %d); "
+                        "each batch is flushed before the next starts" % DEFAULT_BATCH_SIZE)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--device", default="cpu", help="cpu, cuda, cuda:N or mps")
     gm.add_decoding_arguments(p)
@@ -118,8 +144,9 @@ def run_stage(solver: Path, args: list, records: list) -> list:
     return [json.loads(t) for t in proc.stdout.splitlines() if t.strip()]
 
 
-def judge(samples: list, args, solver: Path) -> list:
-    """One verdict dict per sample, in order."""
+def judge(samples: list, args, solver: Path, first: int = 0) -> list:
+    """One verdict dict per sample, in order (``first``: the run-wide index
+    of ``samples[0]``, for the records' ids)."""
     threads = ["--threads", str(args.threads)] if args.threads else []
     bound = ["--max-ply", str(args.max_ply), "--node-budget", str(args.node_budget)]
     results = [dict(s, verdict=None, reasons=[], matePly=None, mainLine=None) for s in samples]
@@ -129,7 +156,8 @@ def judge(samples: list, args, solver: Path) -> list:
             s["verdict"] = "undecodable"
     if not todo:
         return results
-    records = [imported_record(sfen, i, "input" if args.sfen else args.model) for i, sfen in todo]
+    records = [imported_record(sfen, first + i, "input" if args.sfen else args.model)
+               for i, sfen in todo]
     validated = run_stage(solver, ["validate"] + threads, records)
     solved = run_stage(solver, ["solve"] + bound + threads, validated)
     accepted = {}
@@ -179,18 +207,37 @@ def judge(samples: list, args, solver: Path) -> list:
 
 # ---------------------------------------------------------------- main
 
+def print_rows(results: list, args, first: int, out) -> None:
+    """Print one batch (``first``: the run-wide index before it) and flush."""
+    for n, res in enumerate(results, first + 1):
+        if args.json:
+            out.write(json.dumps(dict(res, index=n), ensure_ascii=False) + "\n")
+            continue
+        target = "" if res["matePly"] is None or args.sfen else (
+            " (target %d)" % args.ply if res["matePly"] != args.ply else "")
+        mate = "" if res["matePly"] is None else " mate in %d%s" % (res["matePly"], target)
+        out.write("%2d %-11s%s  %s\n" % (n, res["verdict"], mate, res["sfen"]))
+        if res["mainLine"]:
+            out.write("   main line: %s\n" % " ".join(res["mainLine"]))
+        if res["reasons"]:
+            out.write("   reasons: %s\n" % ", ".join(res["reasons"]))
+    out.flush()
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if args.batch_size < 1:
+        raise SystemExit("--batch-size must be at least 1")
+    if args.count < 0:
+        raise SystemExit("--count must not be negative")
     solver = Path(args.solver) if args.solver else default_solver()
     if not solver.is_file():
         raise SystemExit("solver binary not found: %s (build it: cd solver && cargo build "
                          "--release, or pass --solver)" % solver)
     t0 = time.perf_counter()
-    if args.sfen:   # judge the given positions; no model, no download
-        meta = None
-        samples = [{"sfen": sfen, "line": None} for sfen in args.sfen]
-        t1 = t2 = time.perf_counter()
-    else:
+    meta = model = condition = None
+    total = len(args.sfen) if args.sfen else args.count
+    if not args.sfen:   # --sfen: judge the given positions; no model, no download
         weights = Path(args.weights_dir) if args.weights_dir else gm.fetch_weights(
             args.model, args.repo_id, args.revision)
         model, meta = gm.load_model(weights, args.device)
@@ -199,43 +246,48 @@ def main(argv=None) -> int:
             condition = gm.make_condition(model, args.ply, "sound", extra=extra)
         except ValueError as error:
             raise SystemExit("--ply / --defenders: %s" % error)
-        t1 = time.perf_counter()
-        try:
-            samples = gm.generate(model, condition, args.count, args.seed, args.device,
-                                  **gm.decoding_kwargs(args))
-        except ValueError as error:
-            raise SystemExit(str(error))
-        t2 = time.perf_counter()
-    results = judge(samples, args, solver)
-    t3 = time.perf_counter()
-    for n, res in enumerate(results, 1):
-        if args.json:
-            print(json.dumps(dict(res, index=n), ensure_ascii=False))
-            continue
-        target = "" if res["matePly"] is None or args.sfen else (
-            " (target %d)" % args.ply if res["matePly"] != args.ply else "")
-        mate = "" if res["matePly"] is None else " mate in %d%s" % (res["matePly"], target)
-        print("%2d %-11s%s  %s" % (n, res["verdict"], mate, res["sfen"]))
-        if res["mainLine"]:
-            print("   main line: %s" % " ".join(res["mainLine"]))
-        if res["reasons"]:
-            print("   reasons: %s" % ", ".join(res["reasons"]))
-    counts = {}
-    for res in results:
-        counts[res["verdict"]] = counts.get(res["verdict"], 0) + 1
+    t1 = time.perf_counter()
+    seconds_generate = seconds_judge = 0.0
+    counts, on_target = {}, 0
+    batches = -(-total // args.batch_size)
+    for batch in range(batches):
+        first = batch * args.batch_size
+        size = min(args.batch_size, total - first)
+        ta = time.perf_counter()
+        if args.sfen:
+            samples = [{"sfen": sfen, "line": None} for sfen in args.sfen[first:first + size]]
+        else:
+            try:
+                samples = gm.generate(model, condition, size, batch_seed(args.seed, batch),
+                                      args.device, **gm.decoding_kwargs(args))
+            except ValueError as error:
+                raise SystemExit(str(error))
+        tb = time.perf_counter()
+        results = judge(samples, args, solver, first)
+        tc = time.perf_counter()
+        seconds_generate += tb - ta
+        seconds_judge += tc - tb
+        print_rows(results, args, first, sys.stdout)
+        for res in results:
+            counts[res["verdict"]] = counts.get(res["verdict"], 0) + 1
+            if meta is not None and res["verdict"] == "sound" and res["matePly"] == args.ply:
+                on_target += 1
+        if batches > 1:
+            print("batch %d/%d: %d of %d done" % (batch + 1, batches, first + size, total),
+                  file=sys.stderr, flush=True)
+    done = sum(counts.values())
     if meta is None:
-        print("%d positions: %s" % (len(results), json.dumps(counts, sort_keys=True)),
+        print("%d positions: %s" % (done, json.dumps(counts, sort_keys=True)),
               file=sys.stderr)
-        print("seconds: judge %.1f" % (t3 - t2), file=sys.stderr)
+        print("seconds: judge %.1f" % seconds_judge, file=sys.stderr)
         return 0
-    on_target = sum(1 for r in results if r["verdict"] == "sound" and r["matePly"] == args.ply)
     print("model %s (%s parameters, %s steps), ply %d, %d samples: %s; sound at the target "
           "length: %d" % (meta.get("name", args.model), meta.get("parameters"),
                           meta.get("steps"), args.ply,
-                          len(results), json.dumps(counts, sort_keys=True), on_target),
+                          done, json.dumps(counts, sort_keys=True), on_target),
           file=sys.stderr)
-    print("seconds: load %.1f, generate %.1f, judge %.1f" % (t1 - t0, t2 - t1, t3 - t2),
-          file=sys.stderr)
+    print("seconds: load %.1f, generate %.1f, judge %.1f" % (t1 - t0, seconds_generate,
+                                                             seconds_judge), file=sys.stderr)
     return 0
 
 

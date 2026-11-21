@@ -68,7 +68,13 @@ import torch
 from torch import nn
 
 DEFAULT_REPO_ID = "tokoroten-jp/tsume-gen"
-MODELS = ("sft-small", "sft-medium", "sft-large", "branch-rl-large", "branch-rl-large-ema")
+#: The weight folders of the Hugging Face repository: the paper's models, then
+#: the comparison runs listed on the model card (seeds s0 / s1; ``-ema`` is the
+#: EMA of the weights).
+MODELS = ("sft-small", "sft-medium", "sft-large", "branch-rl-large", "branch-rl-large-ema",
+          "rl-indep-large-s0", "rl-indep-large-s0-ema", "rl-indep-large-s1",
+          "rl-indep-large-s1-ema", "rl-branchonly-large-s0", "rl-branchonly-large-s0-ema",
+          "rl-branchonly-large-s1", "rl-branchonly-large-s1-ema")
 
 # ---------------------------------------------------------------- tokens
 

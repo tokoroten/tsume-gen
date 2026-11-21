@@ -482,12 +482,13 @@ impl NegativesSink {
 /// `--reduce-budget-ladder` of `reduce` and `reduce-accepted`.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct BudgetLadder {
-    /// Budget ladder of the reducer's checks (owner 2026-10-15):
-    /// ascending node budgets, comma-separated, the last equal to
-    /// `--node-budget`, e.g. `10000000,50000000` (50,000,000 is the top rung
-    /// by the owner's rule of 2026-10-23; a
-    /// convention of the runs, not enforced here).  Every acceptance test and
-    /// entry check runs on the first budget; one that ran out of it
+    // The ladder: owner 2026-10-15.  The top rung and no one-thread re-run:
+    // owner 2026-10-23.
+    /// Budget ladder of the reducer's checks: ascending node budgets,
+    /// comma-separated, the last equal to `--node-budget`, e.g.
+    /// `10000000,50000000` (50,000,000 is the top rung the production runs
+    /// use since 2026-10-23; a convention, not enforced here).  Every
+    /// acceptance test and entry check runs on the first budget; one that ran out of it
     /// (`solver_budget_exhausted` / `incomplete_response_graph`, or
     /// `minimum_length_not_proven`, which the shorter minimality search gives
     /// only by running out) runs again on the next.  Every rung runs on the
@@ -495,8 +496,8 @@ pub(crate) struct BudgetLadder {
     /// 1).  On one prober thread the output is byte-identical to the full
     /// budget alone (`src/reduce.rs` `BUDGET_LADDER`); with a parallel prober
     /// only whether a check resolved within its budget may differ, as without
-    /// the ladder.  A check out of budget on the last rung stays a budget-out (owner
-    /// 2026-10-23: never re-run on one thread; the record's
+    /// the ladder.  A check out of budget on the last rung stays a budget-out
+    /// (2026-10-23: never re-run on one thread; the record's
     /// `reduction.minimality` is then `unverified`, and `--emit-budget-outs`
     /// lists it).  At most 3 smaller rungs.
     #[arg(long = "reduce-budget-ladder", value_delimiter = ',')]
