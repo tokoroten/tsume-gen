@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 914 846" width="914" height="846"
+     font-family="'Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif"
+     font-size="14" fill="#253241">
+  <defs>
+    <marker id="main-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#253241"/>
+    </marker>
+    <marker id="discard-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#595f66"/>
+    </marker>
+    <marker id="repair-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#244d75"/>
+    </marker>
+  </defs>
+  <rect width="914" height="846" fill="#fff"/>
+
+  <!-- Two columns: main flow (x 12-372) and side outcomes (x 528-888). -->
+  <rect id="generate" x="12" y="12" width="360" height="62" rx="6"
+        fill="#edf1f5" stroke="#253241" stroke-width="1.5"/>
+  <rect id="legal" x="12" y="98" width="360" height="54" rx="6"
+        fill="#fff" stroke="#253241" stroke-width="1.5"/>
+  <rect id="illegal" x="528" y="98" width="360" height="54" rx="6"
+        fill="#eeeef0" stroke="#595f66" stroke-width="1.5"/>
+  <rect id="mate-check" x="12" y="176" width="360" height="72" rx="6"
+        fill="#fff" stroke="#253241" stroke-width="1.5"/>
+  <rect id="no-mate" x="528" y="176" width="360" height="72" rx="6"
+        fill="#eeeef0" stroke="#595f66" stroke-width="1.5"/>
+  <rect id="mate" x="12" y="272" width="360" height="40" rx="6"
+        fill="#edf1f5" stroke="#253241" stroke-width="1.5"/>
+  <rect id="constraints" x="12" y="344" width="360" height="86" rx="6"
+        fill="#fff" stroke="#253241" stroke-width="1.5"/>
+  <rect id="extra-solution" x="528" y="344" width="360" height="86" rx="6"
+        fill="#eef4fa" stroke="#244d75" stroke-width="1.5"/>
+  <rect id="reduce" x="12" y="494" width="360" height="132" rx="6"
+        fill="#fff" stroke="#253241" stroke-width="1.5"/>
+  <rect id="add-piece" x="528" y="494" width="360" height="132" rx="6"
+        fill="#eef4fa" stroke="#244d75" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <rect id="archive" x="12" y="670" width="360" height="96" rx="6"
+        fill="#e6eee9" stroke="#285a46" stroke-width="2"/>
+  <rect id="archive-negative" x="528" y="670" width="360" height="96" rx="6"
+        fill="#eeeef0" stroke="#595f66" stroke-width="2" stroke-dasharray="2 3"/>
+
+  <!-- Repair is the C/G entry of board reduction: a cell inside the same box. -->
+  <line x1="182" y1="502" x2="182" y2="618" stroke="#244d75" stroke-width="1" stroke-dasharray="3 3"/>
+
+  <g fill="none" stroke="#253241" stroke-width="1.5">
+    <path d="M192 74V95" marker-end="url(#main-arrow)"/>
+    <path d="M192 152V173" marker-end="url(#main-arrow)"/>
+    <path d="M192 248V269" marker-end="url(#main-arrow)"/>
+    <path d="M192 312V341" marker-end="url(#main-arrow)"/>
+    <path d="M290 430V491" marker-end="url(#main-arrow)"/>
+    <path d="M192 626V667" marker-end="url(#main-arrow)"/>
+  </g>
+  <g fill="none" stroke="#595f66" stroke-width="1.5" stroke-dasharray="2 3">
+    <path d="M372 125H525" marker-end="url(#discard-arrow)"/>
+    <path d="M372 212H525" marker-end="url(#discard-arrow)"/>
+    <path d="M372 360H450V328H906V718H891" marker-end="url(#discard-arrow)"/>
+    <path d="M708 626V667" marker-end="url(#discard-arrow)"/>
+    <path d="M372 600H392V718H525" marker-end="url(#discard-arrow)"/>
+  </g>
+  <g fill="none" stroke="#244d75" stroke-width="1.5">
+    <path d="M372 395H525" marker-end="url(#repair-arrow)"/>
+    <path d="M708 430V491" marker-end="url(#repair-arrow)"/>
+    <path d="M528 560H375" marker-end="url(#repair-arrow)"/>
+    <path d="M60 430V491" marker-end="url(#repair-arrow)"/>
+    <path d="M168 560H193" marker-end="url(#repair-arrow)"/>
+  </g>
+
+  <g text-anchor="middle">
+    <text x="192" y="36" font-size="16" font-weight="700">MaskGIT が盤面を生成 <tspan font-size="14">（100 %）</tspan></text>
+    <text x="192" y="60">条件: 目標の手数・玉方の駒の数・手筋など</text>
+
+    <text x="192" y="120" font-size="16" font-weight="700">合法性の検査</text>
+    <text x="192" y="140">二歩・行き所のない駒・攻方玉なし</text>
+    <text x="708" y="120" font-size="16" font-weight="700" fill="#595f66">捨てる</text>
+    <text x="708" y="140" fill="#595f66">不合法 <tspan font-weight="700">0.3 %</tspan></text>
+
+    <text x="192" y="198" font-size="16" font-weight="700">詰み判定（df-pn）</text>
+    <text x="192" y="218">15 手以内に詰むか（手数は問わない）</text>
+    <text x="192" y="237">無駄合は手数に数えない（制約 F）</text>
+    <text x="708" y="206" font-size="16" font-weight="700" fill="#595f66">捨てる</text>
+    <text x="708" y="226" fill="#595f66">15 手以内に詰まない <tspan font-weight="700">30.0 %</tspan></text>
+
+    <text x="192" y="298" font-size="16" font-weight="700">詰む図（15 手以内） <tspan font-size="14">69.7 %</tspan></text>
+
+    <text x="192" y="368" font-size="16" font-weight="700">制約検査</text>
+    <text x="192" y="388">（同じ長さの正解手順は集合で判定）</text>
+    <text x="192" y="410">余詰（制約 B）・駒余り（C）・</text>
+    <text x="192" y="426">関与しない駒（G）</text>
+    <text x="664" y="318" fill="#595f66">B・C・G 以外の不合格（予算切れなど） <tspan font-weight="700">0.5 %</tspan></text>
+
+    <text x="708" y="380" font-size="16" font-weight="700" fill="#244d75">余詰の図</text>
+    <text x="708" y="402" fill="#595f66">駒足しにかける</text>
+    <text x="450" y="378" fill="#244d75">B のみ <tspan font-size="12">（C・G なし）</tspan></text>
+    <text x="450" y="416" font-weight="700" fill="#244d75">35.2 %</text>
+
+    <text x="68" y="454" text-anchor="start" fill="#244d75">C・G あり <tspan font-weight="700">13.9 %</tspan></text>
+    <text x="68" y="472" text-anchor="start" font-size="12" fill="#244d75">（余詰を併せ持つ図も）</text>
+    <text x="298" y="466" text-anchor="start">通過 <tspan font-weight="700">20.1 %</tspan></text>
+
+    <text x="97" y="520" font-size="15" font-weight="700" fill="#244d75">補修（C・G）</text>
+    <text x="97" y="540" font-size="13">関与しない駒を外し、</text>
+    <text x="97" y="556" font-size="13">余る持駒を玉方に渡す。</text>
+    <text x="97" y="576" font-size="13">入力の違反は許して</text>
+    <text x="97" y="592" font-size="13">駒を外し、直れば右へ</text>
+    <text x="97" y="612" font-size="11" fill="#595f66">（駒余りの補修は 11 手まで）</text>
+
+    <text x="277" y="520" font-size="16" font-weight="700">盤面縮約（制約 D）</text>
+    <text x="277" y="544">駒を 1 枚ずつ外し、</text>
+    <text x="277" y="563">外すたびに制約検査を</text>
+    <text x="277" y="582">かけ直す</text>
+    <text x="277" y="604">（極小になるまで）</text>
+
+    <text x="708" y="520" font-size="16" font-weight="700" fill="#244d75">玉方の駒を 1 枚足す</text>
+    <text x="708" y="544">順位付けのモデルの上位 64〜128 まで</text>
+    <text x="708" y="563">試し、最初の成功で止める</text>
+    <text x="708" y="590">足すたびに制約検査、</text>
+    <text x="708" y="609">通った図は盤面縮約へ</text>
+    <text x="450" y="534" fill="#244d75">直った図</text>
+    <text x="450" y="552" fill="#244d75" font-weight="700">23.6 %</text>
+    <text x="400" y="652" text-anchor="start" fill="#595f66">C・G が直らず</text>
+    <text x="400" y="670" text-anchor="start" fill="#595f66" font-weight="700">8.9 %</text>
+    <text x="716" y="652" text-anchor="start" fill="#595f66">直らず <tspan font-weight="700">11.5 %</tspan></text>
+
+    <text x="192" y="696" font-size="16" font-weight="700" fill="#285a46">完全作として収録 <tspan font-size="14">48.7 %</tspan></text>
+    <text x="192" y="717" fill="#285a46">正例。出題と公開データに使う</text>
+    <text x="192" y="738" fill="#285a46">そのまま <tspan font-weight="700">13.2</tspan>・縮約 <tspan font-weight="700">6.9</tspan>・</text>
+    <text x="192" y="756" fill="#285a46">駒足しのあと <tspan font-weight="700">23.6</tspan>・補修のあと <tspan font-weight="700">5.0 %</tspan></text>
+
+    <text x="708" y="696" font-size="16" font-weight="700" fill="#595f66">負例として収録 <tspan font-size="14">20.9 %</tspan></text>
+    <text x="708" y="717" fill="#595f66">制約に違反する図。</text>
+    <text x="708" y="738" fill="#595f66">公開データでは別の区分に入れ、</text>
+    <text x="708" y="756" fill="#595f66">出題には使わない</text>
+  </g>
+
+  <g fill="#595f66">
+    <text x="12" y="794">目標と違う手数で詰んだ図も、その手数で制約検査と盤面縮約にかけて収録する（強化学習の報酬だけが目標</text>
+    <text x="12" y="812">ちょうどの手数を見る）。予算を上げても決まらない未決の図は除く。% は試行に対する割合（大・強化学習の</text>
+    <text x="12" y="830">2,000 ステップ、目標 9 手・条件なし、16,384 試行）。詰む手数は問わない。</text>
+  </g>
+</svg>

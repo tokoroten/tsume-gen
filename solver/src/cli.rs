@@ -140,8 +140,8 @@ pub(crate) enum Command {
         /// for every attacker hand unit of type `k` (`P L N S G B R`).  The
         /// verdicts are unchanged; the result is minimal among the other
         /// pieces (`reduction.minimality` proves that much).  Absent: the
-        /// reducer as it was, byte for byte.  Not with `--emit-record`: a
-        /// record's minimality is over every piece.
+        /// reducer as it was, byte for byte.  Not with `--emit-record`: an
+        /// emitted record's minimality is over every piece.
         #[arg(long = "keep-squares", value_parser = parse_keep_squares)]
         keep_squares: Option<tsume_solver::reduce::KeepSquares>,
         // owner-approved 2026-09-25.

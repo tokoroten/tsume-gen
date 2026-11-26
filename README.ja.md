@@ -12,13 +12,14 @@
 
 | 論文 §6 | 置き場 | 状態 |
 | --- | --- | --- |
-| データセット（v4（2026-11-01）で約 3,330 万図、CC BY 4.0） | <https://huggingface.co/datasets/tokoroten-jp/generated-tsume-shogi> | 公開済み |
+| データセット（v5（2026-11-26）で約 7,527 万図、うち約 2,850 万図に解の木、CC BY 4.0） | <https://huggingface.co/datasets/tokoroten-jp/generated-tsume-shogi> | 公開済み |
 | 本実験の学習データ（約 805 万件、CC BY 4.0） | <https://huggingface.co/datasets/tokoroten-jp/tsume-gen-m17-pretraining> | 公開済み |
 | 生成器の重み（小・中・大の事前学習と、大にソルバの判定を報酬とする強化学習 2,000 ステップ） | <https://huggingface.co/tokoroten-jp/tsume-gen> | 公開済み |
 | ソルバ | このリポジトリの `solver/` | 公開済み |
 | 生成器を動かす Python のサンプル | このリポジトリの `examples/` | 公開済み |
 | 生成器の学習のコード（事前学習・強化学習） | このリポジトリ | 今後足す |
 | 量産の仕組み（生成・判定・縮約・駒足しの流れ） | このリポジトリ | 今後足す |
+| 論文そのもの（PDF と図） | このリポジトリの [`paper/`](paper/README.md) | 公開済み |
 | ブラウザでの作問 | <https://tsume.quest/generate> | 公開済み（このリポジトリの対象外） |
 
 ## 中身
@@ -28,6 +29,7 @@
 | [`solver/`](solver/README.md) | Rust の詰将棋ソルバ（crate `tsume-solver`）。厳密な詰み探索、作品の規約、図を判定する JSON Lines の段 `validate`・`solve`・`reduce`。データセットの図を作ったサブコマンド（`distill`・`extend`・`mine`）もソルバの一部として入っています。 |
 | [`generator/generate_min.py`](generator/generate_min.py) | 生成器の推論のコード（PyTorch）を 1 つのファイルにしたもの。モデル、重みの読み込み、条件の入力、マスクを外していく復号、SFEN と主線の最初の 3 手の出力。単独でも動きます（`python generator/generate_min.py --help`）。学習のコードは入っていません。 |
 | [`examples/generate_and_judge.py`](examples/generate_and_judge.py) | サンプル。Hugging Face から重みを取得し、図を生成し、ソルバで判定します。 |
+| [`paper/`](paper/README.md) | 論文（PDF）と図。著作権は情報処理学会にあり、MIT ライセンスの対象外です。 |
 | [`requirements.txt`](requirements.txt) | `generator/` とサンプルが使う Python のパッケージ。 |
 | [`training/restore_m17.py`](training/restore_m17.py) | tokoroten-jp/tsume-gen-m17-pretraining から、事前学習に読ませたファイルをバイト単位で同じに作り直します（パッケージは [`requirements-training.txt`](requirements-training.txt)）。 |
 | [`LICENSE`](LICENSE) | MIT。 |
@@ -227,7 +229,8 @@ USI では `G*3a 2a3a 3b3a+ 4a3a S*2b 3a4a S*3b 4a3b 4d3c+ 3b4a 2b3a+ 4a3a 1c2b+
 
 ## ライセンス
 
-- コード: MIT（[LICENSE](LICENSE)）。
+- コード: MIT（[LICENSE](LICENSE)）。ただし `paper/` を除きます。
+- `paper/`: 論文と図。著作権は情報処理学会に帰属します（[paper/README.md](paper/README.md)）。
 - 生成器の重み・データセット: CC BY 4.0（それぞれの Hugging Face のページ）。
 - CC BY 4.0 は、私たちが作った重みとデータセットのライセンスです。元の資料のライセンスではありません。やねうら王の局面集は、上に引いた作者の文のもとで使っています。floodgate には著作権の規定がありません（上記）。
 
