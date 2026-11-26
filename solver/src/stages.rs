@@ -196,6 +196,19 @@ fn reduce_stage_inner(
         return Ok(Vec::new());
     };
     let original = parse_sfen(&normalized_sfen)?;
+    // `--keep-squares` naming this record's attacker king: rule A deletes the
+    // king first, so the keep cannot be honoured, and the run stops rather
+    // than quietly dropping it (Codex review 2026-11-22).
+    if let Some(square) = options
+        .reduce
+        .keep
+        .kept_attacker_king(&original, original.side)
+    {
+        anyhow::bail!(
+            "reduce {}: --keep-squares names square {square}, the attacker king's; rule A deletes it, so it cannot be kept",
+            record.source_id
+        );
+    }
     let base_seed = options
         .seed
         .unwrap_or_else(|| seed_from_hex_prefix(&sha256_text(&record.source_id)));

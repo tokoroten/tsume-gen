@@ -123,6 +123,7 @@ fn run() -> Result<()> {
             length_k,
             no_rule_b_entry,
             cg_entry,
+            keep_squares,
             jobs,
             ladder,
             negatives,
@@ -132,6 +133,9 @@ fn run() -> Result<()> {
             position,
         } => {
             note_experimental("--no-rule-b-entry", no_rule_b_entry);
+            if keep_squares.is_some() && record.emit_record.is_some() {
+                bail!("reduce: --keep-squares is not for --emit-record (a catalogue record is minimal over every piece)");
+            }
             ladder.setup(node_budget)?;
             distinct_outputs(
                 "reduce",
@@ -169,6 +173,7 @@ fn run() -> Result<()> {
                     // in stage 4 (2026-10-22).
                     until_fixpoint: false,
                     jobs: position.reduce_jobs(jobs),
+                    keep: keep_squares.unwrap_or(tsume_solver::reduce::KeepSquares::NONE),
                 },
                 seed,
                 kinds: tsume_solver::reduce::TwoKindsOptions {

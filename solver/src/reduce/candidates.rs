@@ -40,6 +40,103 @@ impl Candidate {
     }
 }
 
+/// The rejection reason of a reduction whose [`ReduceOptions::keep`] names
+/// the attacker king's square ([`KeepSquares::kept_attacker_king`]).
+pub const KEEP_ATTACKER_KING: &str = "keep_attacker_king";
+
+/// The squares [`ReduceOptions::keep`] protects: bit `s` for board square `s`
+/// (0-80), bit `81 + k` for the attacker hand units of type `k`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KeepSquares(u128);
+
+impl KeepSquares {
+    /// Nothing kept: the reducer as it always was.
+    pub const NONE: KeepSquares = KeepSquares(0);
+
+    /// The set of `squares`; `None` when one is past the last hand slot (87).
+    pub fn from_squares(squares: &[usize]) -> Option<KeepSquares> {
+        let mut bits = 0u128;
+        for &square in squares {
+            if square >= HAND_SQUARE_BASE + HAND_PIECES.len() {
+                return None;
+            }
+            bits |= 1u128 << square;
+        }
+        Some(KeepSquares(bits))
+    }
+
+    /// `"40,41,85"`: comma-separated square numbers (spaces allowed), as
+    /// `--keep-squares` and the workshop's WebAssembly read them.  An empty
+    /// string is the empty set; `None` for anything else that is not a list
+    /// of squares 0-87.
+    pub fn parse(spelled: &str) -> Option<KeepSquares> {
+        let mut squares = Vec::new();
+        for part in spelled.split(',') {
+            let part = part.trim();
+            if part.is_empty() {
+                if spelled.trim().is_empty() {
+                    continue;
+                }
+                return None;
+            }
+            if !part.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            squares.push(part.parse::<usize>().ok()?);
+        }
+        KeepSquares::from_squares(&squares)
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Whether board square (or hand slot) `square` is kept.
+    pub fn contains(self, square: usize) -> bool {
+        square < 128 && self.0 & (1u128 << square) != 0
+    }
+
+    /// The attacker king's square when this set names it.  Rule A deletes
+    /// that king before anything else, so it cannot be kept: the reducers
+    /// refuse such a set ([`KEEP_ATTACKER_KING`]) rather than ignore it, and
+    /// the CLI stops on it (Codex review 2026-11-22).
+    pub fn kept_attacker_king(self, position: &Position, attacker: u8) -> Option<usize> {
+        if self.is_empty() {
+            return None;
+        }
+        attacker_king_square(position, attacker).filter(|&square| self.contains(square))
+    }
+
+    /// Whether `candidate` is protected.  The attacker king is never kept
+    /// (see [`KeepSquares::kept_attacker_king`]).
+    pub fn keeps(self, candidate: Candidate) -> bool {
+        match candidate {
+            Candidate::AttackerKing(_) => false,
+            Candidate::Board(_) | Candidate::Hand(_) => self.contains(candidate.square()),
+        }
+    }
+
+    /// The kept squares, ascending.
+    pub fn squares(self) -> Vec<usize> {
+        (0..HAND_SQUARE_BASE + HAND_PIECES.len())
+            .filter(|&square| self.contains(square))
+            .collect()
+    }
+}
+
+/// [`reduction_candidates`] less the ones `keep` protects.
+pub fn reduction_candidates_keeping(
+    position: &Position,
+    attacker: u8,
+    keep: KeepSquares,
+) -> Vec<Candidate> {
+    let mut out = reduction_candidates(position, attacker);
+    if !keep.is_empty() {
+        out.retain(|&candidate| !keep.keeps(candidate));
+    }
+    out
+}
+
 /// Rule D candidate list, in the frozen pre-shuffle order.
 pub fn reduction_candidates(position: &Position, attacker: u8) -> Vec<Candidate> {
     let mut out = Vec::new();
@@ -174,8 +271,13 @@ pub fn sweep_inert_pieces(
             .inert_pieces
             .iter()
             .map(|piece| piece.square)
+            .filter(|&square| !options.keep.contains(square))
             .collect();
         squares.sort_unstable();
+        // Every inert piece is kept (`ReduceOptions::keep`): nothing to sweep.
+        if squares.is_empty() {
+            break;
+        }
         // All of them together first.  Inert pieces cover for each other --
         // shedding one of two leaves the other, which is the rule C valley in rule
         // G's clothing -- so a round that could only step one piece at a time would

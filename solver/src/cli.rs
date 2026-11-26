@@ -134,6 +134,16 @@ pub(crate) enum Command {
         // the public pipeline never passes it (docs/experiments/cg-repair/README.md).
         #[arg(long = "cg-entry")]
         cg_entry: bool,
+        // owner 2026-11-22: the workshop's pinned pieces and square rules.
+        /// Squares whose piece is never taken off: comma-separated board
+        /// squares 0-80 (`rank * 9 + file`, file 0 is USI file 9) and `81 + k`
+        /// for every attacker hand unit of type `k` (`P L N S G B R`).  The
+        /// verdicts are unchanged; the result is minimal among the other
+        /// pieces (`reduction.minimality` proves that much).  Absent: the
+        /// reducer as it was, byte for byte.  Not with `--emit-record`: a
+        /// record's minimality is over every piece.
+        #[arg(long = "keep-squares", value_parser = parse_keep_squares)]
+        keep_squares: Option<tsume_solver::reduce::KeepSquares>,
         // owner-approved 2026-09-25.
         /// Concurrent acceptance tests per record:
         /// the attempts and speculative greedy steps of one record run on this
@@ -918,6 +928,14 @@ pub(crate) fn parse_ply_range(text: &str) -> Result<(u32, u32)> {
 /// option fails this test until the fixture (and the audit's tables) follow:
 /// `TSUME_UPDATE_CLI_SURFACE=1 cargo test --release --bin tsume-solver cli_surface`
 /// rewrites it.
+/// `--keep-squares`: [`tsume_solver::reduce::KeepSquares::parse`].
+fn parse_keep_squares(
+    spelled: &str,
+) -> std::result::Result<tsume_solver::reduce::KeepSquares, String> {
+    tsume_solver::reduce::KeepSquares::parse(spelled)
+        .ok_or_else(|| format!("not a list of squares 0-87: {spelled:?}"))
+}
+
 #[cfg(test)]
 mod cli_surface {
     use clap::CommandFactory;

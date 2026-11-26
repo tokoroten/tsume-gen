@@ -421,6 +421,7 @@ impl Default for DistillOptions {
 impl DistillOptions {
     fn reduce_options(&self, target: u32) -> ReduceOptions {
         ReduceOptions {
+            keep: crate::reduce::KeepSquares::NONE,
             attempts: 1,
             // The target length is the tightest exhaustive bound for the reducer's
             // acceptance test, exactly as in [`Search::accept`].

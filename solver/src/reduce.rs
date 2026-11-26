@@ -201,6 +201,15 @@ pub struct ReduceOptions {
     /// about `jobs` times one reduce's.  The CLI refuses `jobs` above 1 with
     /// a parallel prober (`--prober-threads`).  See [`workers`].
     pub jobs: usize,
+    /// Squares whose piece is never a candidate (`reduce --keep-squares`,
+    /// owner 2026-11-22: the workshop's pinned pieces and square rules).
+    /// Board squares 0-80 keep that board piece; `81 + k` keeps every attacker
+    /// hand unit of type `k` (`HAND_PIECES` order).  Empty (the default) is the
+    /// reducer as it was, byte for byte.  With squares kept, the result is
+    /// minimal **among the other pieces**: every greedy pass, the inert sweep
+    /// and the C/G repair pass skip the kept ones, and `reduction.minimality`
+    /// `verified` then proves that no other single piece can come off.
+    pub keep: KeepSquares,
 }
 
 impl Default for ReduceOptions {
@@ -214,6 +223,7 @@ impl Default for ReduceOptions {
             strict_entry: true,
             until_fixpoint: false,
             jobs: 1,
+            keep: KeepSquares::NONE,
         }
     }
 }
@@ -326,6 +336,16 @@ pub fn reduce_with(
     attempts: &mut dyn AttemptRng,
 ) -> ReduceResult {
     let attacker = position.side;
+    // A keep naming the attacker king cannot be honoured: refused, never ignored.
+    if options
+        .keep
+        .kept_attacker_king(position, attacker)
+        .is_some()
+    {
+        return ReduceResult::Rejected {
+            reasons: vec![KEEP_ATTACKER_KING.to_string()],
+        };
+    }
     // Strict entry (rule D v4, owner decision 2026-09-18): the structural gate
     // runs before any search, so an impossible diagram never reaches the
     // solver, and the composition gate then demands the input already be a
@@ -434,7 +454,7 @@ pub fn reduce_with(
     // The candidate list is derived from the *pre-reduction* diagram, so its
     // length -- and with it the shuffle -- never depends on what the pre-pass or
     // the entry sweep already took off.
-    let mut candidates = reduction_candidates(position, attacker);
+    let mut candidates = reduction_candidates_keeping(position, attacker, options.keep);
     if !options.hand_transfer {
         candidates.retain(|candidate| !matches!(candidate, Candidate::Hand(_)));
     }

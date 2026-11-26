@@ -318,6 +318,9 @@ pub(super) fn repair_pass(
         }
         if check.reasons.iter().any(|reason| reason == "koma_amari") {
             'types: for &piece in HAND_PIECES.iter() {
+                if options.keep.keeps(Candidate::Hand(piece)) {
+                    continue;
+                }
                 while chain.board.hands[attacker as usize][piece as usize] > 0 {
                     let Some((trial, removal)) =
                         apply_candidate(&chain.board, Candidate::Hand(piece), attacker)

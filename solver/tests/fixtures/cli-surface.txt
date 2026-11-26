@@ -25,6 +25,7 @@ reduce
   --length-k value default=0
   --no-rule-b-entry flag hidden
   --cg-entry flag
+  --keep-squares value
   --jobs value default=1
   --reduce-budget-ladder value
   --emit-negatives value

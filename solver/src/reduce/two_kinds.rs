@@ -272,6 +272,17 @@ pub fn reduce_two_kinds(
     kinds: &TwoKindsOptions,
     attempts: &mut dyn AttemptRng,
 ) -> ReduceSetResult {
+    // A keep naming the attacker king cannot be honoured (rule A deletes it
+    // first): refused, never ignored.
+    if options
+        .keep
+        .kept_attacker_king(position, position.side)
+        .is_some()
+    {
+        return ReduceSetResult::Rejected {
+            reasons: vec![KEEP_ATTACKER_KING.to_string()],
+        };
+    }
     let _stop = StopScope::arm();
     let (mut result, log) = with_frame(|| {
         reduce_two_kinds_unlogged(solver, position, target_mate_ply, options, kinds, attempts)
@@ -526,7 +537,7 @@ pub(super) fn reduce_two_kinds_unlogged(
         }
     }
 
-    let mut candidates = reduction_candidates(position, attacker);
+    let mut candidates = reduction_candidates_keeping(position, attacker, options.keep);
     if !options.hand_transfer {
         candidates.retain(|candidate| !matches!(candidate, Candidate::Hand(_)));
     }
