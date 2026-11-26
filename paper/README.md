@@ -9,9 +9,9 @@ The page numbers of the proceedings will be added here once they are published.
 
 | Path | What it is |
 | --- | --- |
-| `prosym-core.pdf` | The paper (Japanese), the submitted version |
+| `prosym-core.pdf` | The paper (Japanese), the version resubmitted on 2026-11-27 |
 | `figures/*.svg`, `figures/*.pdf` | The figures of the paper, in both formats |
-| `figures/m17-examples23.jsonl` | The diagrams shown in the figure of 23-ply examples |
+| `figures/m17-examples-clean.jsonl` | The diagrams of Figure A·1 (19 to 23 plies, generated as-is, with no alternative mate found up to 45 plies) |
 | `figures/rule-violations.jsonl` | The counts behind the figure of rule violations |
 
 `paper/` is not covered by the MIT License of this repository: the copyright of the paper, its figures and the tables behind them is retained by the Information Processing Society of Japan.
