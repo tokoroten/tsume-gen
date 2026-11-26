@@ -2,7 +2,7 @@
 
 [日本語](README.ja.md) · AI coding agents: see [AGENTS.md](AGENTS.md)
 
-Code for a deep-learning generator of tsume shogi (Japanese chess mate problems) and for the exact solver that judges what it generates. This repository is the release described in §6 of the paper "盤面と正解手順を同時に生成する詰将棋の自動作問：MaskGIT と厳密ソルバによる強化学習" (Generating tsume shogi problems with the board and the solution together: MaskGIT and reinforcement learning with an exact solver), 68th Programming Symposium (IPSJ).
+Code for a deep-learning generator of tsume shogi (Japanese chess mate problems) and for the exact solver that judges what it generates. This repository is the release described in §6 of the paper "盤面と正解手順を同時に生成する詰将棋の自動作問：MaskGIT と厳密ソルバによる強化学習" (Automatic Tsume-Shogi Composition by Jointly Generating the Board and the Solution: Reinforcement Learning with MaskGIT and an Exact Solver), 68th Programming Symposium (IPSJ).
 
 - The generator is a bidirectional Transformer based on MaskGIT. Starting from a fully masked input, it fills the board, the attacker's pieces in hand and the first three moves of the solution together.
 - The solver is a df-pn tsume solver written in Rust. It decides whether a generated diagram is a *minimal sound problem* in the paper's sense: a forced mate with no alternative solution (yozume), no attacker pieces left over at the end, no piece that takes no part, and no piece that can be removed with the solution kept.
